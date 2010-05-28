@@ -3,6 +3,7 @@
 #include <malloc.h>
 #include <assert.h>
 #include <memory.h>
+#include <time.h>
 
 typedef unsigned char byte;
 typedef unsigned short word;
@@ -51,8 +52,9 @@ void sort_bese(int *A, int *B, int depth)	{
 
 int main(const int argc, const char *argv[])	{
 	FILE *fx = NULL;
-	const int radPow = 0, termin = 10,
-		radMask = (1<<radPow)-1, SINT =  sizeof(int);
+	time_t t0 = 0;
+	const int radPow = 20, termin = 10,
+		SINT = sizeof(int);
 	int i,N,nd,k,source=-1;
 	int *I,*X;
 	printf("Var BWT: Radix+BeSe\n");
@@ -75,6 +77,7 @@ int main(const int argc, const char *argv[])	{
 	printf("Loaded: %d kb; Allocated %d kb\n", N>>10,
 		(N*(1+SINT) + (SINT<<radPow) + SINT+termin)>>10 );
 	
+	t0 = clock();
 	//zero order statistics
 	for(i=0; i!=N; ++i)
 		R[s[i]] += 1;
@@ -92,20 +95,21 @@ int main(const int argc, const char *argv[])	{
 		if(k>>3 != (k+BIT)>>3)
 			s[(k>>3)+1] = v>>( 8-(k&7) );
 		k += BIT;
-		X[ get_key(k) & radMask ] += 1;
+		X[ get_key(k) >> (32-radPow) ] += 1;
 	}
 	printf("Symbols (%d) compressed (%d bits).\n", nd,BIT);
 	
 	for(i=1<<radPow,k=N; i--;)
 		X[i] = (k -= X[i]);
-	for(i=0; i!=N; ++i)
-		I[X[ get_key(i*BIT) & radMask ]++] = i+1;
+	for(i=0; ++i<=N; )
+		I[X[ get_key(i*BIT) >> (32-radPow) ]++] = i;
 	printf("Radix (%d bits) completed.\n", radPow);
 
 	for(X[-1]=0,i=0; i!=1<<radPow; ++i)	{
 		sort_bese(I+X[i-1],I+X[i],radPow);
 	}
-	printf("BeSe completed.\n");
+	printf("SufSort completed: %.3f sec\n",
+		(clock()-t0)*1.f / CLOCKS_PER_SEC );
 	
 	for(i=0; i!=256; ++i)
 		DC[CD[i]] = i;
