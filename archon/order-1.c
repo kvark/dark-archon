@@ -49,15 +49,15 @@ void sort_bese(int *A, int *B, int depth)	{
 }
 
 
-
 int main(const int argc, const char *argv[])	{
 	FILE *fx = NULL;
 	time_t t0 = 0;
-	const int radPow = 20, termin = 10,
-		SINT = sizeof(int);
-	int i,N,nd,k,source=-1;
-	int *I,*X;
+	const unsigned radPow = 20, termin = 10,
+		SINT = sizeof(int), useItoh = 1;
+	int i,N,nd,k,source=-1,sorted=0;
+	int *P,*X,*Y;
 	printf("Var BWT: Radix+BeSe\n");
+	assert(radPow <= 30);
 	if(argc != 3) return -1;
 
 	//read input & allocate memory
@@ -70,12 +70,13 @@ int main(const int argc, const char *argv[])	{
 	memset(s-termin, -1, termin);
 	fread(s,1,N,fx);
 	fclose(fx);
-	I = (int*)malloc( N*SINT );
-	memset( I, -1, N*SINT );
-	X = (int*)malloc( SINT+(SINT<<radPow) )+1;
+	P = (int*)malloc( N*SINT );
+	memset( P, -1, N*SINT );
+	X = (int*)malloc( SINT+(SINT<<radPow) );
+	Y = (int*)malloc( SINT+(SINT<<radPow) );
 	memset( X, 0, SINT<<radPow );
 	printf("Loaded: %d kb; Allocated %d kb\n", N>>10,
-		(N*(1+SINT) + (SINT<<radPow) + SINT+termin)>>10 );
+		(N*(2+SINT) + 2*(SINT<<radPow) + SINT+termin)>>10 );
 	
 	t0 = clock();
 	//zero order statistics
@@ -98,49 +99,80 @@ int main(const int argc, const char *argv[])	{
 		X[ get_key(k) >> (32-radPow) ] += 1;
 	}
 	printf("Symbols (%d) compressed (%d bits).\n", nd,BIT);
-	
-	for(i=1<<radPow,k=N; i--;)
-		X[i] = (k -= X[i]);
-	for(i=0; ++i<=N; )
-		I[X[ get_key(i*BIT) >> (32-radPow) ]++] = i;
-	printf("Radix (%d bits) completed.\n", radPow);
+		
+	{	//radix sort
+		dword prev_key = (dword)-1;
+		for(i=1<<radPow,k=X[i]=Y[i]=N; i--;)
+			X[i] = (k -= X[i]);
+		memcpy( Y, X, SINT+(SINT<<radPow) );
+		for(i=0; ++i<=N; )	{
+			dword new_key = get_key(i*BIT) >> (32-radPow);
+			long diff = (new_key<<1) - prev_key;
+			prev_key += diff;
+			if( useItoh && diff<0 ) ++prev_key;
+			else P[X[new_key]++] = i;
+		}
+		printf("Radix (%d bits) completed.\n", radPow);
+	}
 
-	for(X[-1]=0,i=0; i!=1<<radPow; ++i)	{
-		sort_bese(I+X[i-1],I+X[i],radPow);
+	for(i=0; i!=1<<radPow; ++i)	{
+		sort_bese(P+Y[i],P+X[i],radPow);
+		sorted += X[i]-Y[i];
 	}
 	printf("SufSort completed: %.3f sec\n",
-		(clock()-t0)*1.f / CLOCKS_PER_SEC );
+		(clock()-t0)*1.f / CLOCKS_PER_SEC, sorted*1.f/N );
 	
+	if(useItoh)	{
+		for(i=N; i--; )	{
+			const int id = P[i]+1;
+			assert(id > 0);
+			if(id > N)	{
+				assert(source<0);
+				source = i;
+			}else	{
+				const dword key = get_key(id*BIT) >> (32-radPow);
+				if(Y[key+1] <= i)	{
+					const int to = --Y[key+1];
+					assert(X[key] <= to);
+					assert(P[to] == -1);
+					P[to] = id;
+				}
+			}
+		}
+		printf("IT-1 completed: %.2f bad elements\n", sorted*1.f/N);
+	}
+
 	for(i=0; i!=256; ++i)
 		DC[CD[i]] = i;
 	//prepare verification
 	memset(R,0,sizeof(R));
 	for(i=N; i--;)	{
-		R[ get_char(I[i]-1) ] = i;
+		R[ get_char(P[i]-1) ] = i;
 	}
 	//write output
 	fx = fopen(argv[2],"wb");
+	assert(source >= 0);
+	fwrite(&source,4,1,fx);
+
 	for(i=0; i!=N; ++i)	{
-		int v = I[i]; byte ch;
+		int v = P[i]; byte ch;
+		assert(v>0);
 		if(v == N)	{
-			assert(source<0);
-			source = i;
+			//todo: optimize it?
 			ch = get_char(0);
-			//R[ ch ] += 1;
 		}else	{
 			ch = get_char(v);
-			if(I[R[ch]++] != 1+v) break;
+			if(P[R[ch]++] != 1+v) break;
 		}
 		fputc( ch, fx );
 	}
 	printf("Verification: %s\n", (i==N?"OK":"Failed") );
-	assert(source >= 0);
-	fwrite(&source,4,1,fx);
 	fclose(fx);
 	
 	//finish it
 	free(s+1-termin);
-	free(I); free(X-1);
+	free(P);
+	free(X); free(Y);
 	printf("Done\n");
 	return 0;
 }
