@@ -9,12 +9,23 @@ typedef unsigned char byte;
 typedef unsigned short word;
 typedef unsigned long dword;
 
-static int R[256] = {0}, BIT;
-static byte CD[256],DC[256],*s;
+static int R1[0x100] = {0}, BIT;
+static int R2[0x100][0x100] = {0};
+static byte CD[0x100],DC[0x100],*s;
 
-int r_cmp(const void *a, const void *b)	{
-	return R[(byte*)a - CD] - R[(byte*)b - CD];
+void print_order(FILE *const fd, const int nd, const char str[])	{
+	int i,j;
+	fprintf(fd,"\n%s matrix:\n",str);
+	for(i=0; i!=nd; ++i)
+		fprintf(fd,"%d ",DC[i]);
+	fputs("\n-------------\n",fd);
+	for(i=0; i!=nd; ++i)	{
+		for(j=0; j!=nd; ++j)
+			fprintf( fd, "%d ", R2[DC[i]][DC[j]] );
+		fputc('\n',fd);
+	}
 }
+
 
 dword get_key(const int bi)	{
 	const byte *const s2 = s + (bi>>3);
@@ -53,7 +64,7 @@ int main(const int argc, const char *argv[])	{
 	FILE *fx = NULL;
 	time_t t0 = 0;
 	const unsigned radPow = 20, termin = 10,
-		SINT = sizeof(int), useItoh = 1;
+		SINT = sizeof(int), useItoh = 2;
 	int i,N,nd,k,source=-1,sorted=0;
 	int *P,*X,*Y;
 	printf("Var BWT: Radix+BeSe\n");
@@ -76,17 +87,45 @@ int main(const int argc, const char *argv[])	{
 	Y = (int*)malloc( SINT+(SINT<<radPow) );
 	memset( X, 0, SINT<<radPow );
 	printf("Loaded: %d kb; Allocated %d kb\n", N>>10,
-		(N*(2+SINT) + 2*(SINT<<radPow) + SINT+termin)>>10 );
+		(N*(2+SINT) + (SINT<<16) + 2*(SINT<<radPow) + SINT+termin)>>10 );
 	
 	t0 = clock();
-	//zero order statistics
-	for(i=0; i!=N; ++i)
-		R[s[i]] += 1;
+	{	//zero & first order statistics
+		byte b = 0xFF, c = 0xFF;
+		for(i=0; i!=N; ++i)	{
+			const byte a = s[i];
+			R1[a] += 1;
+			if(a!=b) { c=b; b=a; }
+			R2[a][c] += 1;
+		}
+	}
 	for(CD[0]=i=0; i!=0xFF; ++i) 
-		CD[i+1] = CD[i] + (R[i] ? 1:0);
-	nd = CD[0xFF] + (R[0xFF] ? 1:0);	//int here => no overflow
-	//qsort(CD, 0x100,1, r_cmp);	//reorder most frequent -> least
+		CD[i+1] = CD[i] + (R1[i]? 1:0);
+	nd = CD[0xFF] + (R1[0xFF] ? 1:0);	//int here => no overflow
+	assert( nd>0 );
 	for(BIT=0; (1<<BIT)<nd; ++BIT);
+
+	//optimize
+	memset( DC, 0, sizeof(DC) );
+	if(useItoh == 2)	{
+		//the algorithm is not correct! :(
+		FILE *const fd = fopen("matrix.txt","w");
+		for(i=0; i!=0x100; ++i)
+			DC[CD[i]] = i;
+		print_order(fd,nd,"Original");
+		for(k=nd; --k;)	{
+			for(i=0; i+k!=nd; ++i)	{
+				const int a = DC[i], b = DC[i+k];
+				if(R2[a][b] >= R2[b][a]) continue;
+				DC[i] = b; DC[i+k] = a;
+				print_order(fd,nd,"Step");
+			}
+		}
+		print_order(fd,nd,"Optimized");
+		fclose(fd);
+		for(k=0; k!=nd; ++k)
+			CD[DC[k]] = k;
+	}
 	
 	//transform input (k = dest bit index)
 	*--s = 0;
@@ -141,13 +180,15 @@ int main(const int argc, const char *argv[])	{
 		}
 		printf("IT-1 completed: %.2f bad elements\n", sorted*1.f/N);
 	}
-
-	for(i=0; i!=256; ++i)
-		DC[CD[i]] = i;
+	
+	if(useItoh != 2)	{
+		for(i=0; i!=256; ++i)
+			DC[CD[i]] = i;
+	}
 	//prepare verification
-	memset(R,0,sizeof(R));
+	memset(R1,0,sizeof(R1));
 	for(i=N; i--;)	{
-		R[ get_char(P[i]-1) ] = i;
+		R1[ get_char(P[i]-1) ] = i;
 	}
 	//write output
 	fx = fopen(argv[2],"wb");
@@ -162,7 +203,7 @@ int main(const int argc, const char *argv[])	{
 			ch = get_char(0);
 		}else	{
 			ch = get_char(v);
-			if(P[R[ch]++] != 1+v) break;
+			if(P[R1[ch]++] != 1+v) break;
 		}
 		fputc( ch, fx );
 	}
