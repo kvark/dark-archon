@@ -59,6 +59,66 @@ void sort_bese(int *A, int *B, int depth)	{
 	}
 }
 
+void optimize(int nd)	{
+	int i,k;
+	//the algorithm is not correct! :(
+	FILE *const fd = fopen("matrix.txt","w");
+	for(i=0; i!=0x100; ++i)
+		DC[CD[i]] = i;
+	print_order(fd,nd,"Original");
+	for(k=nd; --k;)	{
+		for(i=0; i+k!=nd; ++i)	{
+			const int a = DC[i], b = DC[i+k];
+			if(R2[a][b] >= R2[b][a]) continue;
+			DC[i] = b; DC[i+k] = a;
+			print_order(fd,nd,"Step");
+		}
+	}
+	print_order(fd,nd,"Optimized");
+	fclose(fd);
+	for(k=0; k!=nd; ++k)
+		CD[DC[k]] = k;
+}
+
+static int* cur_sort_array = NULL;
+
+int cmp_dest(const void *p0, const void *p1)	{
+	return	cur_sort_array[*(byte*)p1]-
+			cur_sort_array[*(byte*)p0];
+}
+
+void topology(byte elem, int nd, byte *const stack, byte *const state, byte (*Dest)[0x100])	{
+	int j;
+	state[elem] = 1;
+	for(j=0; j!=nd; ++j)	{
+		const byte d = Dest[elem][j];
+		if(state[d]) continue;
+		topology(d,nd,stack+1,state,Dest);
+	}
+	state[elem] = 2;
+	stack[0] = elem;
+}
+
+void optimize_topo(int nd)	{
+	static byte Dest[0x100][0x100];
+	byte stack[0x100];
+	byte state[0x100];
+	int i,j,k=0;
+	memset(stack,0,0x100);
+	memset(state,0,0x100);
+	for(i=0; i!=nd; ++i)	{
+		const int ci = DC[i];
+		for(j=0; j!=nd; ++j)
+			Dest[ci][j] = DC[j];
+		cur_sort_array = R2[ci];
+		qsort(Dest[ci],nd,1,cmp_dest);
+	}
+	topology(DC[0],nd,stack,state,Dest);	//start elem
+	for(i=0; i!=nd; ++i)
+		CD[stack[i]] = i;
+}
+
+
 
 int main(const int argc, const char *argv[])	{
 	FILE *fx = NULL;
@@ -107,25 +167,10 @@ int main(const int argc, const char *argv[])	{
 
 	//optimize
 	memset( DC, 0, sizeof(DC) );
-	if(useItoh == 2)	{
-		//the algorithm is not correct! :(
-		FILE *const fd = fopen("matrix.txt","w");
-		for(i=0; i!=0x100; ++i)
-			DC[CD[i]] = i;
-		print_order(fd,nd,"Original");
-		for(k=nd; --k;)	{
-			for(i=0; i+k!=nd; ++i)	{
-				const int a = DC[i], b = DC[i+k];
-				if(R2[a][b] >= R2[b][a]) continue;
-				DC[i] = b; DC[i+k] = a;
-				print_order(fd,nd,"Step");
-			}
-		}
-		print_order(fd,nd,"Optimized");
-		fclose(fd);
-		for(k=0; k!=nd; ++k)
-			CD[DC[k]] = k;
-	}
+	for(i=0; i!=0x100; ++i)
+		DC[CD[i]] = i;
+	//if(useItoh == 2) optimize_topo(nd);
+	if(useItoh == 2) optimize(nd);
 	
 	//transform input (k = dest bit index)
 	*--s = 0;
