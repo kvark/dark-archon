@@ -59,12 +59,10 @@ void sort_bese(int *A, int *B, int depth)	{
 	}
 }
 
-void optimize(int nd)	{
+void optimize_matrix(int nd)	{
 	int i,k;
 	//the algorithm is not correct! :(
 	FILE *const fd = fopen("matrix.txt","w");
-	for(i=0; i!=0x100; ++i)
-		DC[CD[i]] = i;
 	print_order(fd,nd,"Original");
 	for(k=nd; --k;)	{
 		for(i=0; i+k!=nd; ++i)	{
@@ -76,8 +74,6 @@ void optimize(int nd)	{
 	}
 	print_order(fd,nd,"Optimized");
 	fclose(fd);
-	for(k=0; k!=nd; ++k)
-		CD[DC[k]] = k;
 }
 
 static int* cur_sort_array = NULL;
@@ -114,10 +110,35 @@ void optimize_topo(int nd)	{
 		qsort(Dest[ci],nd,1,cmp_dest);
 	}
 	topology(DC[0],nd,stack,state,Dest);	//start elem
-	for(i=0; i!=nd; ++i)
-		CD[stack[i]] = i;
+	memcpy(DC, stack, nd*sizeof(int));
 }
 
+
+int cmp_freq(const void *p0, const void *p1)	{
+	return	R1[*(byte*)p1] - R1[*(byte*)p0];
+}
+
+void optimize_bubble(int nd)	{
+	int i,j;
+	qsort(DC, nd, sizeof(byte), cmp_freq);
+	for(i=0; i+1<nd; )	{
+		byte x;
+		int b0 = i-1, b1 = 0;
+		for(j=i+1; j+1<nd; ++j)	{
+			const byte c0 = DC[j], c1 = DC[j+1];
+			const int cur = R2[c1][c0] - R2[c0][c1];
+			if(cur>b1) b0=j,b1=cur;
+		}
+		if(!b1) break;
+		x = DC[b0];
+		DC[b0] = DC[b0+1];
+		DC[b0+1] = x;
+		if(b0 && b0==i)
+			--i;
+		else if(b0!=i+1)
+			++i;
+	}
+}
 
 
 int main(const int argc, const char *argv[])	{
@@ -169,8 +190,12 @@ int main(const int argc, const char *argv[])	{
 	memset( DC, 0, sizeof(DC) );
 	for(i=0; i!=0x100; ++i)
 		DC[CD[i]] = i;
-	//if(useItoh == 2) optimize_topo(nd);
-	if(useItoh == 2) optimize(nd);
+	if(useItoh == 2)
+		//optimize_matrix(nd);
+		//optimize_topo(nd);
+		optimize_bubble(nd);
+	for(i=0; i!=0x100; ++i)
+		CD[DC[i]] = i;
 	
 	//transform input (k = dest bit index)
 	*--s = 0;
