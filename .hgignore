@@ -1,4 +1,5 @@
 syntax: glob
 
+food
 bin/*
 msvc*

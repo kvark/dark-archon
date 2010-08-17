@@ -119,24 +119,20 @@ int cmp_freq(const void *p0, const void *p1)	{
 }
 
 void optimize_bubble(int nd)	{
-	int i,j;
+	int i;
 	qsort(DC, nd, sizeof(byte), cmp_freq);
-	for(i=0; i+1<nd; )	{
+	for(;;)	{
 		byte x;
-		int b0 = i-1, b1 = 0;
-		for(j=i+1; j+1<nd; ++j)	{
-			const byte c0 = DC[j], c1 = DC[j+1];
+		int b0 = -1, b1 = 0;
+		for(i=0; i+1<nd; ++i)	{
+			const byte c0 = DC[i], c1 = DC[i+1];
 			const int cur = R2[c1][c0] - R2[c0][c1];
-			if(cur>b1) b0=j,b1=cur;
+			if(cur>b1) b0=i,b1=cur;
 		}
 		if(!b1) break;
 		x = DC[b0];
 		DC[b0] = DC[b0+1];
 		DC[b0+1] = x;
-		if(b0 && b0==i)
-			--i;
-		else if(b0!=i+1)
-			++i;
 	}
 }
 
