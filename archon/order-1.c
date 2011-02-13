@@ -10,7 +10,7 @@ typedef unsigned short word;
 typedef unsigned long dword;
 
 static int R1[0x100] = {0}, BIT;
-static int R2[0x100][0x100] = {0};
+static int R2[0x100][0x100] = {{0}};
 static byte CD[0x100],DC[0x100],*s;
 
 void print_order(FILE *const fd, const int nd, const char str[])	{
@@ -26,6 +26,10 @@ void print_order(FILE *const fd, const int nd, const char str[])	{
 	}
 }
 
+
+void optimize_none(int nd)	{
+	//dummy
+}
 
 dword get_key(const int bi)	{
 	const byte *const s2 = s + (bi>>3);
@@ -99,7 +103,7 @@ void optimize_topo(int nd)	{
 	static byte Dest[0x100][0x100];
 	byte stack[0x100];
 	byte state[0x100];
-	int i,j,k=0;
+	int i,j;
 	memset(stack,0,0x100);
 	memset(state,0,0x100);
 	for(i=0; i!=nd; ++i)	{
@@ -136,20 +140,96 @@ void optimize_bubble(int nd)	{
 	}
 }
 
+void optimize_greazy(int nd)	{
+	int i,p0=0,p1=nd;
+	printf("Greasy!\n");
+	//step-1: count inputs and outputs to graph nodes
+	int ins[256]={0},ots[256]={0};
+	for(i=0; i!=256; ++i)	{
+		int j;
+		for(j=0; j!=256; ++j)	{
+			const int val = R2[i][j];
+			ins[i] += val;
+			ots[j] += val;
+		}
+	}
+	while(p0 != p1)	{
+		int bestPos = -1, bestVal = 0;
+		//step-2a: find best node
+		for(i=p0; i!=p1; ++i)	{
+			const byte ch = DC[i];
+			const int val = ots[ch] - ins[ch];
+			if( ins[ch]*ots[ch] == 0 )	{
+				bestPos = i;
+				break;
+			}
+			if(bestPos<0 || val>bestVal)	{
+				bestPos = i;
+				bestVal = val;
+			}
+		}
+		//step-2b: append it either to the start or to the end
+		assert( bestPos>=0 );
+		bestVal = DC[bestPos];
+		if( ots[bestVal] )
+			i = --p1;
+		else
+			i = p0++;
+		DC[bestPos] = DC[i];
+		DC[i] = bestVal;
+		//step-2c: update counters
+		for(i=0; i!=256; ++i)	{
+			ins[i] -= R2[i][bestVal];
+			ots[i] -= R2[bestVal][i];
+		}
+		printf("%d ", bestVal);
+	}
+	printf("\n");
+}
+
 
 int main(const int argc, const char *argv[])	{
 	FILE *fx = NULL;
 	time_t t0 = 0;
+	char const *outName = NULL;
 	const unsigned radPow = 20, termin = 10,
 		SINT = sizeof(int), useItoh = 2;
 	int i,N,nd,k,source=-1,sorted=0;
 	int *P,*X,*Y;
+	void (*f_order)(int) = optimize_none;
 	printf("Var BWT: Radix+BeSe\n");
+	printf("archon <f_in> <f_out> [-o alphabet_order]\n");
 	assert(radPow <= 30);
-	if(argc != 3) return -1;
+	for(i=1; i!=argc; ++i)	{
+		if( !strcmp(argv[i],"-o") )	{
+			++i;
+			assert(i!=argc);
+			if( !strcmp(argv[i],"greazy") )
+				f_order = optimize_greazy;
+			if( !strcmp(argv[i],"matrix") )
+				f_order = optimize_matrix;
+			if( !strcmp(argv[i],"topo") )
+				f_order = optimize_topo;
+			if( !strcmp(argv[i],"bubble") )
+				f_order = optimize_bubble;
+		}else
+		if(!fx)	{
+			fx = fopen(argv[i],"rb");
+			if(!fx)	{
+				printf("Can't open input!\n");
+				return -1;
+			}
+		}else if(outName)	{
+			printf("Too many arguments!\n");
+			return -1;
+		}else outName = argv[i];
+	}
+	if(!fx || !outName)	{
+		printf("Too few arguments!\n");
+		return -1;
+	}
 
 	//read input & allocate memory
-	fx = fopen(argv[1],"rb");
 	fseek(fx,0,SEEK_END);
 	N = ftell(fx);
 	fseek(fx,0,SEEK_SET);
@@ -187,9 +267,7 @@ int main(const int argc, const char *argv[])	{
 	for(i=0; i!=0x100; ++i)
 		DC[CD[i]] = i;
 	if(useItoh == 2)
-		//optimize_matrix(nd);
-		//optimize_topo(nd);
-		optimize_bubble(nd);
+		f_order(nd);
 	for(i=0; i!=0x100; ++i)
 		CD[DC[i]] = i;
 	
@@ -225,7 +303,7 @@ int main(const int argc, const char *argv[])	{
 		sorted += X[i]-Y[i];
 	}
 	printf("SufSort completed: %.3f sec\n",
-		(clock()-t0)*1.f / CLOCKS_PER_SEC, sorted*1.f/N );
+		(clock()-t0)*1.f / CLOCKS_PER_SEC );
 	
 	if(useItoh)	{
 		for(i=N; i--; )	{
@@ -257,7 +335,7 @@ int main(const int argc, const char *argv[])	{
 		R1[ get_char(P[i]-1) ] = i;
 	}
 	//write output
-	fx = fopen(argv[2],"wb");
+	fx = fopen(outName,"wb");
 	assert(source >= 0);
 	fwrite(&source,4,1,fx);
 
