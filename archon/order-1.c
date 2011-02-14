@@ -27,8 +27,16 @@ void print_order(FILE *const fd, const int nd, const char str[])	{
 }
 
 
+int cmp_freq(const void *p0, const void *p1)	{
+	return	R1[*(byte*)p1] - R1[*(byte*)p0];
+}
+
 void optimize_none(int nd)	{
 	//dummy
+}
+
+void optimize_freq(int nd)	{
+	qsort(DC, nd, sizeof(byte), cmp_freq);
 }
 
 dword get_key(const int bi)	{
@@ -118,10 +126,6 @@ void optimize_topo(int nd)	{
 }
 
 
-int cmp_freq(const void *p0, const void *p1)	{
-	return	R1[*(byte*)p1] - R1[*(byte*)p0];
-}
-
 void optimize_bubble(int nd)	{
 	int i;
 	qsort(DC, nd, sizeof(byte), cmp_freq);
@@ -140,7 +144,7 @@ void optimize_bubble(int nd)	{
 	}
 }
 
-void optimize_greazy(int nd)	{
+void optimize_greedy(int nd)	{
 	int i,p0=0,p1=nd;
 	printf("Greasy!\n");
 	//step-1: count inputs and outputs to graph nodes
@@ -194,10 +198,23 @@ struct Options	{
 	unsigned radPow;
 };
 
+struct FunParam	{
+	const char *name;
+	void (*fun)(int);
+}static const 	pFun[] =	{
+	{"none",	optimize_none	},
+	{"freq",	optimize_freq	},
+	{"greedy",	optimize_greedy	},
+	{"matrix",	optimize_matrix	},
+	{"topo",	optimize_topo	},
+	{"bubble",	optimize_bubble	},
+	{NULL,		NULL			}
+};
+
 struct Options read_command_line(const int ac, const char *av[])	{
 	struct Options o = { NULL, NULL, optimize_none, 20 };
-	int i;
-	for(i=0; i!=ac; ++i)	{
+	int i,j;
+	for(i=1; i!=ac; ++i)	{
 		const char *par = av[i];
 		if( par[0]=='-' )	{
 			assert( !par[2] );
@@ -205,14 +222,8 @@ struct Options read_command_line(const int ac, const char *av[])	{
 			case 'o':
 				par = av[++i];
 				assert(i!=ac);
-				if( !strcmp(par,"greedy") )
-					o.fOrder = optimize_greazy;
-				if( !strcmp(par,"matrix") )
-					o.fOrder = optimize_matrix;
-				if( !strcmp(par,"topo") )
-					o.fOrder = optimize_topo;
-				if( !strcmp(par,"bubble") )
-					o.fOrder = optimize_bubble;
+				for(j=0; pFun[j].name && strcmp(par,pFun[j].name); ++j);
+				o.fOrder = pFun[j].fun;
 				break;
 			default:
 				printf("Unknow parameter: %s\n",par);
@@ -233,7 +244,6 @@ struct Options read_command_line(const int ac, const char *av[])	{
 int main(const int argc, const char *argv[])	{
 	FILE *fx = NULL;
 	time_t t0 = 0;
-	char const *outName = NULL;
 	const unsigned termin = 10, SINT = sizeof(int), useItoh = 2;
 	int i,N,nd,k,source=-1,sorted=0;
 	int *P,*X,*Y; struct Options opt;
@@ -241,8 +251,17 @@ int main(const int argc, const char *argv[])	{
 	printf("archon <f_in> <f_out> [-o alphabet_order]\n");
 	opt = read_command_line(argc,argv);
 	assert( opt.radPow <= 30 );
-	if( !opt.nameIn || !opt.nameOut )
+	if( !opt.nameIn || !opt.nameOut )	{
+		printf("Error: IO undefined\n");
 		return -1;
+	}
+	if( !opt.fOrder )	{
+		printf("Error: unknown order function\nTry one of these: ");
+		for(i=0; pFun[i].name; ++i)
+			printf("%s%s", i?", ":"", pFun[i].name);
+		printf("\n");
+		return -2;
+	}
 
 	fx = fopen( opt.nameIn, "rb" );
 	//read input & allocate memory
@@ -301,7 +320,7 @@ int main(const int argc, const char *argv[])	{
 
 	{	//radix sort
 		dword prev_key = (dword)-1;
-		for(i=1<<opt.radPow,k=X[i]=Y[i]=N; i--;)
+		for(i=1<<opt.radPow, k=X[i]=Y[i]=N; i--;)
 			X[i] = (k -= X[i]);
 		memcpy( Y, X, SINT+(SINT<<opt.radPow) );
 		for(i=0; ++i<=N; )	{
@@ -351,7 +370,7 @@ int main(const int argc, const char *argv[])	{
 		R1[ get_char(P[i]-1) ] = i;
 	}
 	//write output
-	fx = fopen(outName,"wb");
+	fx = fopen( opt.nameOut, "wb" );
 	assert(source >= 0);
 	fwrite(&source,4,1,fx);
 
