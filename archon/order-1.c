@@ -54,7 +54,7 @@ void sort_bese(int *A, int *B, int depth)	{
 			if(V<U)	{
 				*y++ = *x; *x++ = s;
 			}else if(V>U)	{
-				*y = *--z; *z = s; 
+				*y = *--z; *z = s;
 			}else y++;
 		}
 		sort_bese(A,x,depth);
@@ -188,47 +188,63 @@ void optimize_greazy(int nd)	{
 }
 
 
+struct Options	{
+	const char *nameIn,*nameOut;
+	void (*fOrder)(int);
+	unsigned radPow;
+};
+
+struct Options read_command_line(const int ac, const char *av[])	{
+	struct Options o = { NULL, NULL, optimize_none, 20 };
+	int i;
+	for(i=0; i!=ac; ++i)	{
+		const char *par = av[i];
+		if( par[0]=='-' )	{
+			assert( !par[2] );
+			switch(par[1])	{
+			case 'o':
+				par = av[++i];
+				assert(i!=ac);
+				if( !strcmp(par,"greedy") )
+					o.fOrder = optimize_greazy;
+				if( !strcmp(par,"matrix") )
+					o.fOrder = optimize_matrix;
+				if( !strcmp(par,"topo") )
+					o.fOrder = optimize_topo;
+				if( !strcmp(par,"bubble") )
+					o.fOrder = optimize_bubble;
+				break;
+			default:
+				printf("Unknow parameter: %s\n",par);
+			}
+		}else
+		if(!o.nameIn)	{
+			o.nameIn = par;
+		}else if(!o.nameOut)	{
+			o.nameOut = par;
+		}else	{
+			printf("Excess argument: %s\n",par);
+		}
+	}
+	return o;
+}
+
+
 int main(const int argc, const char *argv[])	{
 	FILE *fx = NULL;
 	time_t t0 = 0;
 	char const *outName = NULL;
-	const unsigned radPow = 20, termin = 10,
-		SINT = sizeof(int), useItoh = 2;
+	const unsigned termin = 10, SINT = sizeof(int), useItoh = 2;
 	int i,N,nd,k,source=-1,sorted=0;
-	int *P,*X,*Y;
-	void (*f_order)(int) = optimize_none;
+	int *P,*X,*Y; struct Options opt;
 	printf("Var BWT: Radix+BeSe\n");
 	printf("archon <f_in> <f_out> [-o alphabet_order]\n");
-	assert(radPow <= 30);
-	for(i=1; i!=argc; ++i)	{
-		if( !strcmp(argv[i],"-o") )	{
-			++i;
-			assert(i!=argc);
-			if( !strcmp(argv[i],"greazy") )
-				f_order = optimize_greazy;
-			if( !strcmp(argv[i],"matrix") )
-				f_order = optimize_matrix;
-			if( !strcmp(argv[i],"topo") )
-				f_order = optimize_topo;
-			if( !strcmp(argv[i],"bubble") )
-				f_order = optimize_bubble;
-		}else
-		if(!fx)	{
-			fx = fopen(argv[i],"rb");
-			if(!fx)	{
-				printf("Can't open input!\n");
-				return -1;
-			}
-		}else if(outName)	{
-			printf("Too many arguments!\n");
-			return -1;
-		}else outName = argv[i];
-	}
-	if(!fx || !outName)	{
-		printf("Too few arguments!\n");
+	opt = read_command_line(argc,argv);
+	assert( opt.radPow <= 30 );
+	if( !opt.nameIn || !opt.nameOut )
 		return -1;
-	}
 
+	fx = fopen( opt.nameIn, "rb" );
 	//read input & allocate memory
 	fseek(fx,0,SEEK_END);
 	N = ftell(fx);
@@ -240,12 +256,12 @@ int main(const int argc, const char *argv[])	{
 	fclose(fx);
 	P = (int*)malloc( N*SINT );
 	memset( P, -1, N*SINT );
-	X = (int*)malloc( SINT+(SINT<<radPow) );
-	Y = (int*)malloc( SINT+(SINT<<radPow) );
-	memset( X, 0, SINT<<radPow );
+	X = (int*)malloc( SINT+(SINT<<opt.radPow) );
+	Y = (int*)malloc( SINT+(SINT<<opt.radPow) );
+	memset( X, 0, SINT<<opt.radPow );
 	printf("Loaded: %d kb; Allocated %d kb\n", N>>10,
-		(N*(2+SINT) + (SINT<<16) + 2*(SINT<<radPow) + SINT+termin)>>10 );
-	
+		(N*(2+SINT) + (SINT<<16) + 2*(SINT<<opt.radPow) + SINT+termin)>>10 );
+
 	t0 = clock();
 	{	//zero & first order statistics
 		byte b = 0xFF, c = 0xFF;
@@ -256,7 +272,7 @@ int main(const int argc, const char *argv[])	{
 			R2[a][c] += 1;
 		}
 	}
-	for(CD[0]=i=0; i!=0xFF; ++i) 
+	for(CD[0]=i=0; i!=0xFF; ++i)
 		CD[i+1] = CD[i] + (R1[i]? 1:0);
 	nd = CD[0xFF] + (R1[0xFF] ? 1:0);	//int here => no overflow
 	assert( nd>0 );
@@ -267,10 +283,10 @@ int main(const int argc, const char *argv[])	{
 	for(i=0; i!=0x100; ++i)
 		DC[CD[i]] = i;
 	if(useItoh == 2)
-		f_order(nd);
+		opt.fOrder(nd);
 	for(i=0; i!=0x100; ++i)
 		CD[DC[i]] = i;
-	
+
 	//transform input (k = dest bit index)
 	*--s = 0;
 	for(i=0,k=0; i!=N;)	{
@@ -279,32 +295,32 @@ int main(const int argc, const char *argv[])	{
 		if(k>>3 != (k+BIT)>>3)
 			s[(k>>3)+1] = v>>( 8-(k&7) );
 		k += BIT;
-		X[ get_key(k) >> (32-radPow) ] += 1;
+		X[ get_key(k) >> (32-opt.radPow) ] += 1;
 	}
 	printf("Symbols (%d) compressed (%d bits).\n", nd,BIT);
-		
+
 	{	//radix sort
 		dword prev_key = (dword)-1;
-		for(i=1<<radPow,k=X[i]=Y[i]=N; i--;)
+		for(i=1<<opt.radPow,k=X[i]=Y[i]=N; i--;)
 			X[i] = (k -= X[i]);
-		memcpy( Y, X, SINT+(SINT<<radPow) );
+		memcpy( Y, X, SINT+(SINT<<opt.radPow) );
 		for(i=0; ++i<=N; )	{
-			dword new_key = get_key(i*BIT) >> (32-radPow);
+			dword new_key = get_key(i*BIT) >> (32-opt.radPow);
 			long diff = (new_key<<1) - prev_key;
 			prev_key += diff;
 			if( useItoh && diff<0 ) ++prev_key;
 			else P[X[new_key]++] = i;
 		}
-		printf("Radix (%d bits) completed.\n", radPow);
+		printf("Radix (%d bits) completed.\n", opt.radPow);
 	}
 
-	for(i=0; i!=1<<radPow; ++i)	{
-		sort_bese(P+Y[i],P+X[i],radPow);
+	for(i=0; i!=1<<opt.radPow; ++i)	{
+		sort_bese( P+Y[i],P+X[i], opt.radPow );
 		sorted += X[i]-Y[i];
 	}
 	printf("SufSort completed: %.3f sec\n",
 		(clock()-t0)*1.f / CLOCKS_PER_SEC );
-	
+
 	if(useItoh)	{
 		for(i=N; i--; )	{
 			const int id = P[i]+1;
@@ -313,7 +329,7 @@ int main(const int argc, const char *argv[])	{
 				assert(source<0);
 				source = i;
 			}else	{
-				const dword key = get_key(id*BIT) >> (32-radPow);
+				const dword key = get_key(id*BIT) >> (32-opt.radPow);
 				if(Y[key+1] <= i)	{
 					const int to = --Y[key+1];
 					assert(X[key] <= to);
@@ -324,7 +340,7 @@ int main(const int argc, const char *argv[])	{
 		}
 		printf("IT-1 completed: %.2f bad elements\n", sorted*1.f/N);
 	}
-	
+
 	if(useItoh != 2)	{
 		for(i=0; i!=256; ++i)
 			DC[CD[i]] = i;
@@ -353,7 +369,7 @@ int main(const int argc, const char *argv[])	{
 	}
 	printf("Verification: %s\n", (i==N?"OK":"Failed") );
 	fclose(fx);
-	
+
 	//finish it
 	free(s+1-termin);
 	free(P);
