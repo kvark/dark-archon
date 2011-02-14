@@ -1,5 +1,6 @@
 syntax: glob
 
-food
-bin/*
+bin
+obj
 msvc*
+bugs
