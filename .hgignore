@@ -1,0 +1,6 @@
+syntax: glob
+
+bin
+obj
+msvc*
+bugs
