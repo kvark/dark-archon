@@ -1,0 +1,23 @@
+#version 130
+
+in	int	at_ia,at_ib,at_ic;
+out	int	to_index;
+
+uniform usamplerBuffer	unit_val;
+
+
+void main()	{
+	int odd = gl_VertexID & 1;
+	int i0 = at_ib, i1 = at_ia*odd + at_ic*(1-odd);
+	uint v0 = texelFetch(unit_val,i0).x;
+	uint v1 = texelFetch(unit_val,i1).x;
+	bool cond = odd==0;
+	if(v1>v0 == cond)	to_index = i0;
+	else if(v1<v0 == cond)	to_index = i1;
+	else	{
+		v0 = texelFetch(unit_val,i0+1).x;
+		v1 = texelFetch(unit_val,i1+1).x;
+		if(v1>v0 == cond)	to_index = i0;
+		else			to_index = i1;
+	}
+}

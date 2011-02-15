@@ -70,9 +70,9 @@ using win = makeWindow():
 	GL.BufferData( BufferTarget.ArrayBuffer, IntPtr(4*N), IntPtr.Zero, BufferUsageHint.StaticDraw )
 	GL.GenBuffers(1,v_value)
 	GL.BindBuffer( BufferTarget.ArrayBuffer, v_value )
-	GL.BufferData( BufferTarget.ArrayBuffer, IntPtr(4*N), IntPtr.Zero, BufferUsageHint.StaticDraw )
+	GL.BufferData( BufferTarget.ArrayBuffer, IntPtr(4*N+4), IntPtr.Zero, BufferUsageHint.StaticDraw )
 	#1b. fill I and V with TF
-	sh_init = makeShader( ('init.glv',), ('at_c0','at_c1','at_c2','at_c3'), ('to_index','to_value') )
+	sh_init = makeShader( ('sh/init.glv',), ('at_c0','at_c1','at_c2','at_c3'), ('to_index','to_value') )
 	GL.BindBuffer( BufferTarget.ArrayBuffer, v_data )
 	for i in range(4): # bypassing uint stride=1 hardware limitation
 		GL.EnableVertexAttribArray(i)
@@ -80,6 +80,10 @@ using win = makeWindow():
 	GL.UseProgram(sh_init)
 	GL.Enable( EnableCap.RasterizerDiscard )
 	tf_query = -1
+	GL.ActiveTexture( TextureUnit.Texture0 )
+	tex_buf = GL.GenTexture()
+	GL.BindTexture( TextureTarget.TextureBuffer, tex_buf )
+	GL.TexBuffer( TextureBufferTarget.TextureBuffer, SizedInternalFormat.R32ui, v_value )
 	GL.GenQueries(1,tf_query)
 	GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, 0, v_index )
 	GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, 1, v_value )
@@ -93,23 +97,24 @@ using win = makeWindow():
 	for i in range(2):
 		GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, i, 0 )
 	#2. iterate
-	sh_sort = makeShader( ('sort.glv',), ('at_data',), ('to_index',) )
+	sh_sort = makeShader( ('sh/sort.glv',), ('at_ia','at_ib','at_ic'), ('to_index',) )
+	loc_tex = GL.GetUniformLocation(sh_sort,'unit_val')
 	v_out = -1
 	GL.GenBuffers(1,v_out)
 	GL.BindBuffer( BufferTarget.ArrayBuffer, v_out )
 	GL.BufferData( BufferTarget.ArrayBuffer, IntPtr(4*N), IntPtr.Zero, BufferUsageHint.StaticDraw )
-	GL.ActiveTexture( TextureUnit.Texture0 )
-	tex = GL.GenTexture()
-	GL.BindTexture( TextureTarget.TextureBuffer, tex )
-	GL.TexBuffer( TextureBufferTarget.TextureBuffer, SizedInternalFormat.R32ui, v_value )
-	GL.BindBuffer( BufferTarget.ArrayBuffer, v_data )
-	GL.EnableVertexAttribArray(0)
-	GL.VertexAttribIPointer( 0, 1, VertexAttribIPointerType.UnsignedByte, 1, IntPtr.Zero )
-	GL.BindBuffer( BufferTarget.ElementArrayBuffer, v_index )
 	jump = 4
 	while true:
 		# 2a. sort by 2 keys
+		GL.BindBuffer( BufferTarget.ArrayBuffer, v_value )
+		GL.CopyBufferSubData( BufferTarget.ArrayBuffer, BufferTarget.ArrayBuffer, IntPtr.Zero, IntPtr(N*4), IntPtr(4) )
+		//bind index [-1,0,1]
+		GL.BindBuffer( BufferTarget.ArrayBuffer, v_index )
+		for i in range(3):
+			GL.EnableVertexAttribArray(i)
+			GL.VertexAttribIPointer( i, 1, VertexAttribIPointerType.Int, 0, IntPtr((i-1)*4) )
 		GL.UseProgram(sh_sort)
+		GL.Uniform1(loc_tex,0)
 		for i in range(N+N-3):
 			dI = array[of int](N)
 			readBuffer(dI,v_index)
@@ -120,13 +125,15 @@ using win = makeWindow():
 			GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, 0, v_out )
 			GL.BeginTransformFeedback( BeginFeedbackMode.Points )
 			GL.BeginQuery( QueryTarget.TransformFeedbackPrimitivesWritten, tf_query )
-			GL.DrawElements( BeginMode.Points, num, DrawElementsType.UnsignedInt, IntPtr(off*4) )
+			GL.DrawArrays( BeginMode.Points, off, num )
 			GL.EndQuery( QueryTarget.TransformFeedbackPrimitivesWritten )
 			GL.EndTransformFeedback()
-			GL.BindBuffer( BufferTarget.ArrayBuffer, v_out )
-			GL.CopyBufferSubData( BufferTarget.ArrayBuffer, BufferTarget.ElementArrayBuffer, IntPtr.Zero, ioff, inum )
+			GL.BindBuffer( BufferTarget.ElementArrayBuffer, v_out )
+			GL.CopyBufferSubData( BufferTarget.ElementArrayBuffer, BufferTarget.ArrayBuffer, IntPtr.Zero, ioff, inum )
 			GL.BindBuffer( BufferTarget.ArrayBuffer, 0 )
 		GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, 0, 0 )
+		for i in range(3):
+			GL.DisableVertexAttribArray(i)
 		# 2b. update V
 		# 2c. loop
 		jump *= 2

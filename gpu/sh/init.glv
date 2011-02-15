@@ -1,0 +1,9 @@
+#version 130
+
+in	uint	at_c0, at_c1, at_c2, at_c3;
+out	uint	to_index, to_value;
+
+void main()	{
+	to_index = uint(gl_VertexID);
+	to_value = (at_c0<<24) + (at_c1<<16) + (at_c2<<8) + at_c3;
+}
