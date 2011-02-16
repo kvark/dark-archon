@@ -98,7 +98,9 @@ using win = makeWindow():
 		GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, i, 0 )
 	#2. iterate
 	sh_sort = makeShader( ('sh/sort.glv',), ('at_ia','at_ib','at_ic'), ('to_index','to_debug') )
-	loc_tex = GL.GetUniformLocation(sh_sort,'unit_val')
+	loc_sort_tex = GL.GetUniformLocation(sh_sort,'unit_val')
+	sh_diff = makeShader( ('sh/diff.glv',), ('at_i0','at_i1'), ('to_diff',) )
+	loc_diff_tex = GL.GetUniformLocation(sh_diff,'unit_val')
 	v_out = -1
 	GL.GenBuffers(1,v_out)
 	GL.BindBuffer( BufferTarget.ArrayBuffer, v_out )
@@ -118,11 +120,11 @@ using win = makeWindow():
 			GL.EnableVertexAttribArray(i)
 			GL.VertexAttribIPointer( i, 1, VertexAttribIPointerType.Int, 0, IntPtr((i-1)*4) )
 		GL.UseProgram(sh_sort)
-		GL.Uniform1(loc_tex,0)
+		GL.Uniform1(loc_sort_tex,0)
 		dI = array[of int](N)
 		dD = array[of int](N)
 		for i in range(N+N-3):
-			readBuffer(dI,v_index)
+			#readBuffer(dI,v_index)
 			off = i & 1
 			num = Math.Min(i,N+N-4-i) + 2-off
 			ioff = IntPtr(off*4)
@@ -138,13 +140,27 @@ using win = makeWindow():
 			GL.BindBuffer( BufferTarget.ElementArrayBuffer, v_out )
 			GL.BindBuffer( BufferTarget.ArrayBuffer, v_index )
 			GL.CopyBufferSubData( BufferTarget.ElementArrayBuffer, BufferTarget.ArrayBuffer, IntPtr.Zero, ioff, inum )
-			readBuffer(dD,v_debug)
+			#readBuffer(dD,v_debug)
 			GL.BindBuffer( BufferTarget.ElementArrayBuffer, 0 )
 		GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, 0, 0 )
 		for i in range(3):
 			GL.DisableVertexAttribArray(i)
 		readBuffer(dI,v_index)
 		# 2b. update V
+		for i in range(2):
+			GL.EnableVertexAttribArray(i)
+			GL.VertexAttribIPointer( i, 1, VertexAttribIPointerType.Int, 0, IntPtr(i*4) )
+		GL.UseProgram(sh_diff)
+		GL.Uniform1(loc_diff_tex,0)
+		GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, 0, v_out )
+		GL.BeginTransformFeedback( BeginFeedbackMode.Points )
+		GL.BeginQuery( QueryTarget.TransformFeedbackPrimitivesWritten, tf_query )
+		GL.DrawArrays( BeginMode.Points, 0, N )
+		GL.EndQuery( QueryTarget.TransformFeedbackPrimitivesWritten )
+		GL.EndTransformFeedback()
+		for i in range(2):
+			GL.DisableVertexAttribArray(i)
+		readBuffer(dD,v_out)
 		# 2c. loop
 		jump *= 2
 		break	if jump>=N
