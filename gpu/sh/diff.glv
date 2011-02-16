@@ -1,0 +1,18 @@
+#version 130
+
+in	int	at_i0, at_i1;
+out	int	to_diff;
+
+uniform usamplerBuffer	unit_val;
+
+
+void main()	{
+	uint v0 = texelFetch(unit_val,at_i0).x;		// curr value
+	uint v1 = texelFetch(unit_val,at_i1).x;		// next value
+	if(v0==v1)	{				// go a step deeper
+		v0 = texelFetch(unit_val,at_i0+1).x;
+		v1 = texelFetch(unit_val,at_i1+1).x;
+	}
+	if(v1>v0)	to_diff = 1;
+	else		to_diff = 0;
+}
