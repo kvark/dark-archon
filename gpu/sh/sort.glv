@@ -1,21 +1,21 @@
 #version 130
 
 in	int	at_ia, at_ib, at_ic;
-out	int	to_index;
+out	int	to_index, to_debug;
 
 uniform usamplerBuffer	unit_val;
 
 
 void main()	{
-	int odd = gl_VertexID & 1;			// comparison direction
+	int odd = gl_VertexID & 1;	// comparison direction (0=forward,1=backward)
 	int i0 = at_ib, i1 = at_ia*odd + at_ic*(1-odd);	// current and destination indices
-	int j0 = min(i0,i1), j1 = max(i0,i1);		// low and high indices
-	uint v0 = texelFetch(unit_val,j0).x;		// low value
-	uint v1 = texelFetch(unit_val,j1).x;		// high value
-	if(v0==v1)	{
-		v0 = texelFetch(unit_val,j0+1).x;
-		v1 = texelFetch(unit_val,j1+1).x;
+	uint v0 = texelFetch(unit_val,i0).x;		// src value
+	uint v1 = texelFetch(unit_val,i1).x;		// dst value
+	if(v0==v1)	{				// go a step deeper
+		v0 = texelFetch(unit_val,i0+1).x;
+		v1 = texelFetch(unit_val,i1+1).x;
 	}
-	if(v1>v0)	to_index = i0;
-	else		to_index = i1;
+	if((v1>v0) == (odd==0))	to_index = i0;	// it's OK, leave it untouched
+	else			to_index = i1;	// grab another one to fix that
+	to_debug = 0;
 }
