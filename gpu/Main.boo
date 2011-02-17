@@ -99,6 +99,7 @@ using win = makeWindow():
 	#2. iterate
 	sh_sort = makeShader( ('sh/sort.glv',), ('at_ia','at_ib','at_ic'), ('to_index','to_debug') )
 	loc_sort_tex = GL.GetUniformLocation(sh_sort,'unit_val')
+	sh_sum2 = makeShader( ('sh/sum.glv',), ('at_d0','at_d1'), ('to_sum',) )
 	sh_diff = makeShader( ('sh/diff.glv',), ('at_i0','at_i1'), ('to_diff',) )
 	loc_diff_tex = GL.GetUniformLocation(sh_diff,'unit_val')
 	v_out = -1
@@ -147,6 +148,7 @@ using win = makeWindow():
 			GL.DisableVertexAttribArray(i)
 		readBuffer(dI,v_index)
 		# 2b. update V
+		# 2b0 - get neighbour differences
 		for i in range(2):
 			GL.EnableVertexAttribArray(i)
 			GL.VertexAttribIPointer( i, 1, VertexAttribIPointerType.Int, 0, IntPtr(i*4) )
@@ -161,6 +163,32 @@ using win = makeWindow():
 		for i in range(2):
 			GL.DisableVertexAttribArray(i)
 		readBuffer(dD,v_out)
+		# 2b1 - sum up differences
+		GL.BindBuffer( BufferTarget.ArrayBuffer, v_out )
+		for i in range(2):
+			GL.EnableVertexAttribArray(i)
+			GL.VertexAttribIPointer(i, 1, VertexAttribIPointerType.Int, 2*4, IntPtr(i*4) )
+		GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, 0, v_value )
+		GL.UseProgram(sh_sum2)
+		off = i = 0
+		size = N
+		while true:
+			size >>= 1
+			break if not size
+			GL.BindBufferRange( BufferTarget.TransformFeedbackBuffer, 0, v_value, IntPtr(off*4), IntPtr(size*4) )
+			GL.BeginTransformFeedback( BeginFeedbackMode.Points )
+			GL.BeginQuery( QueryTarget.TransformFeedbackPrimitivesWritten, tf_query )
+			GL.DrawArrays( BeginMode.Points, 0, size )
+			GL.EndQuery( QueryTarget.TransformFeedbackPrimitivesWritten )
+			GL.EndTransformFeedback()
+			GL.BindBuffer( BufferTarget.ArrayBuffer, v_value )
+			for i in range(2):
+				GL.VertexAttribIPointer(i, 1, VertexAttribIPointerType.Int, 2*4, IntPtr((off+i)*4) )
+			off += size
+			readBuffer(dD,v_value)
+			GL.BindBuffer( BufferTarget.ArrayBuffer, 0 )
+		for i in range(2):
+			GL.DisableVertexAttribArray(i)
 		# 2c. loop
 		jump *= 2
 		break	if jump>=N
