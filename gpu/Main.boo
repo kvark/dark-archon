@@ -171,9 +171,7 @@ using win = makeWindow():
 		GL.UseProgram(sh_sum2)
 		off = 0
 		size = N
-		while true:
-			size >>= 1
-			break if not size
+		while (size >>= 1):
 			GL.BindBufferRange( BufferTarget.TransformFeedbackBuffer, 0, v_value, IntPtr(off*4), IntPtr(size*4) )
 			GL.BeginTransformFeedback( BeginFeedbackMode.Points )
 			GL.BeginQuery( QueryTarget.TransformFeedbackPrimitivesWritten, tf_query )
@@ -196,3 +194,10 @@ using win = makeWindow():
 	readBuffer(dV,v_value)
 	dI[0] = dV[0] = 0
 	#3. read data back
+	#4. clean up
+	GL.DeleteTexture(tex_buf)
+	GL.DeleteBuffers(1,v_data)
+	GL.DeleteBuffers(1,v_index)
+	GL.DeleteBuffers(1,v_value)
+	GL.DeleteBuffers(1,v_out)
+	GL.DeleteVertexArrays(1,v_ar)
