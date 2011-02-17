@@ -1,8 +1,8 @@
 #version 130
 
-in	int	at_d0, at_d1;
+in	ivec2	at_diff;
 out	int	to_sum;
 
 void main()	{
-	to_sum = at_d0 + at_d1;
+	to_sum = at_diff.x + at_diff.y;
 }
