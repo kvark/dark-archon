@@ -1,0 +1,8 @@
+#version 130
+
+in	int	at_d0, at_d1;
+out	int	to_sum;
+
+void main()	{
+	to_sum = at_d0 + at_d1;
+}
