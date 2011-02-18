@@ -1,0 +1,8 @@
+#version 130
+
+in	ivec2	at_off;
+out	int	to_one;
+
+void main()	{
+	to_one = at_off.y;
+}
