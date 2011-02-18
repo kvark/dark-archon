@@ -1,0 +1,8 @@
+#version 130
+
+in	int	at_sum, at_one;
+out	ivec2	to_off;
+
+void main()	{
+	to_off = ivec2(at_sum-at_one, at_sum);
+}
