@@ -44,6 +44,7 @@ def makeShader(names as (string), attribs as (string), feedback as (string)) as 
 
 
 def readBuffer(data as (int), vbo as uint) as void:
+	#return	#uncomment for release
 	GL.BindBuffer( BufferTarget.ArrayBuffer, vbo )
 	buf = GL.MapBuffer( BufferTarget.ArrayBuffer, BufferAccess.ReadOnly )
 	Marshal.Copy( buf, data, 0, data.Length )
@@ -110,6 +111,7 @@ using win = makeWindow():
 	GL.BindFramebuffer( FramebufferTarget.Framebuffer, 0 )
 	#2. iterate
 	sh_sort = makeShader( ('sh/sort.glv',), ('at_ia','at_ib','at_ic'), ('to_index','to_debug') )
+	loc_sort_step	= GL.GetUniformLocation(sh_sort,'step')
 	loc_sort_tex	= GL.GetUniformLocation(sh_sort,'unit_val')
 	sh_sum	= makeShader( ('sh/sum.glv',), ('at_diff',), ('to_sum',) )
 	sh_diff = makeShader( ('sh/diff.glv',), ('at_i0','at_i1'), ('to_diff',) )
@@ -145,8 +147,9 @@ using win = makeWindow():
 		GL.UseProgram(sh_sort)
 		GL.Uniform1(loc_sort_tex,0)
 		for i in range(N+N-3):
-			#readBuffer(dI,v_index)
+			readBuffer(dI,v_index)
 			off = i & 1
+			GL.Uniform1(loc_sort_step,off)
 			num = Math.Min(i,N+N-4-i) + 2-off
 			ioff = IntPtr(off*4)
 			inum = IntPtr(num*4)
@@ -161,7 +164,7 @@ using win = makeWindow():
 			GL.BindBuffer( BufferTarget.ElementArrayBuffer, v_out )
 			GL.BindBuffer( BufferTarget.ArrayBuffer, v_index )
 			GL.CopyBufferSubData( BufferTarget.ElementArrayBuffer, BufferTarget.ArrayBuffer, IntPtr.Zero, ioff, inum )
-			#readBuffer(dD,v_debug)
+			readBuffer(dD,v_debug)
 			GL.BindBuffer( BufferTarget.ElementArrayBuffer, 0 )
 		GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, 0, 0 )
 		for i in range(3):
