@@ -1,0 +1,11 @@
+#version 130
+
+in	int	at_val, at_ind;
+out	to_val;
+
+uniform	float scale;
+
+void main()	{
+	to_val = at_val;
+	gl_Position = vec4( float(at_ind)*scale*2.0 - 1.0, 0.0,0.0,1.0);
+}
