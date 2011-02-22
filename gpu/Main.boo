@@ -54,12 +54,9 @@ using win = makeWindow():
 	print win.Title
 	data = (of byte: 5,3,2,4)
 	N = data.Length
-	v_data = v_ar = v_out = -1
+	v_data = v_ar = -1
 	GL.GenBuffers(1,v_data)
 	GL.GenVertexArrays(1,v_ar)
-	GL.GenBuffers(1,v_out)
-	GL.BindBuffer( BufferTarget.ArrayBuffer, v_out )
-	GL.BufferData( BufferTarget.ArrayBuffer, IntPtr(4*(N+1)), IntPtr.Zero, BufferUsageHint.StaticDraw )
 	#0. load data
 	GL.BindVertexArray(v_ar)
 	GL.BindBuffer( BufferTarget.ArrayBuffer, v_data )
@@ -82,26 +79,21 @@ using win = makeWindow():
 		GL.VertexAttribIPointer( i, 1, VertexAttribIPointerType.UnsignedByte, 1, IntPtr(i) )
 	GL.UseProgram(sh_init)
 	GL.Enable( EnableCap.RasterizerDiscard )
-	tf_query = -1
+	tf_query = sm_query = -1
 	GL.ActiveTexture( TextureUnit.Texture0 )
 	tex_tmp	= GL.GenTexture()
-	GL.BindTexture( TextureTarget.Texture1D, tex_tmp )
-	GL.TexImage2D( TextureTarget.Texture2D, 0, PixelInternalFormat.R32f, N,1,0, PixelFormat.Red, PixelType.Int, IntPtr.Zero )
+	GL.BindTexture( TextureTarget.Texture2D, tex_tmp )
+	GL.TexImage2D( TextureTarget.Texture2D, 0, PixelInternalFormat.R32i, N,1,0, PixelFormat.RedInteger, PixelType.Int, IntPtr.Zero )
 	tex_val		= GL.GenTexture()
 	GL.BindTexture( TextureTarget.TextureBuffer, tex_val )
 	GL.TexBuffer( TextureBufferTarget.TextureBuffer, SizedInternalFormat.R32ui, v_value )
-	fbo = -1
-	GL.GenFramebuffers(1,fbo)
-	GL.BindFramebuffer( FramebufferTarget.Framebuffer, fbo )
-	GL.FramebufferTexture( FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, tex_tmp, 0)
-	fbo_status = GL.CheckFramebufferStatus( FramebufferTarget.Framebuffer )
-	assert fbo_status == FramebufferErrorCode.FramebufferComplete
+	GL.GenQueries(1,sm_query)
 	GL.GenQueries(1,tf_query)
 	GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, 0, v_index )
 	GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, 1, v_value )
 	GL.BeginTransformFeedback( BeginFeedbackMode.Points )
 	GL.BeginQuery( QueryTarget.TransformFeedbackPrimitivesWritten, tf_query )
-	GL.DrawArrays( BeginMode.Points, 0, data.Length )
+	GL.DrawArrays( BeginMode.Points, 0, N )
 	GL.EndQuery( QueryTarget.TransformFeedbackPrimitivesWritten )
 	GL.EndTransformFeedback()
 	GL.Disable( EnableCap.RasterizerDiscard )
@@ -109,6 +101,13 @@ using win = makeWindow():
 		GL.DisableVertexAttribArray(i)
 	for i in range(2):
 		GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, i, 0 )
+	fbo = -1
+	GL.GenFramebuffers(1,fbo)
+	GL.BindFramebuffer( FramebufferTarget.Framebuffer, fbo )
+	GL.FramebufferTexture( FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, tex_tmp, 0)
+	fbo_status = GL.CheckFramebufferStatus( FramebufferTarget.Framebuffer )
+	assert fbo_status == FramebufferErrorCode.FramebufferComplete
+	GL.BindFramebuffer( FramebufferTarget.Framebuffer, 0 )
 	#2. iterate
 	sh_sort = makeShader( ('sh/sort.glv',), ('at_ia','at_ib','at_ic'), ('to_index','to_debug') )
 	loc_sort_tex	= GL.GetUniformLocation(sh_sort,'unit_val')
@@ -119,12 +118,21 @@ using win = makeWindow():
 	sh_off	= makeShader( ('sh/off.glv',), ('at_sum','at_one'), ('to_off',) )
 	sh_fill	= makeShader( ('sh/fill.glv','sh/fill.glf'), ('at_val','at_ind'), null )
 	loc_fill_scale	= GL.GetUniformLocation(sh_fill,'scale')
+	v_out = -1
+	GL.GenBuffers(1,v_out)
+	GL.BindBuffer( BufferTarget.ArrayBuffer, v_out )
+	GL.BufferData( BufferTarget.ArrayBuffer, IntPtr(4*(N+1)), IntPtr.Zero, BufferUsageHint.StaticDraw )
 	v_debug = -1
 	GL.GenBuffers(1,v_debug)
 	GL.BindBuffer( BufferTarget.ArrayBuffer, v_debug )
 	GL.BufferData( BufferTarget.ArrayBuffer, IntPtr(4*N), IntPtr.Zero, BufferUsageHint.StaticDraw )
 	jump = 4
+	dI = array[of int](N)
+	dV = array[of int](N)
+	dD = array[of int](N)
 	while true:
+		readBuffer(dI,v_index)
+		readBuffer(dV,v_value)
 		GL.Enable( EnableCap.RasterizerDiscard )
 		# 2a. sort by 2 keys
 		GL.BindBuffer( BufferTarget.ArrayBuffer, v_value )
@@ -136,8 +144,6 @@ using win = makeWindow():
 			GL.VertexAttribIPointer( i, 1, VertexAttribIPointerType.Int, 0, IntPtr((i-1)*4) )
 		GL.UseProgram(sh_sort)
 		GL.Uniform1(loc_sort_tex,0)
-		dI = array[of int](N)
-		dD = array[of int](N)
 		for i in range(N+N-3):
 			#readBuffer(dI,v_index)
 			off = i & 1
@@ -247,9 +253,16 @@ using win = makeWindow():
 		GL.DisableVertexAttribArray(0)
 		GL.Disable( EnableCap.RasterizerDiscard )
 		# 2b3 - scatter back to V
-		assert N>1
+		readBuffer(dD,v_out)
+		readBuffer(dI,v_index)
+		result = -1	# ClearBuffer doesn't work properly with non-zero values
+		GL.BindFramebuffer( FramebufferTarget.Framebuffer, fbo )
+		GL.DrawBuffer( DrawBufferMode.ColorAttachment0 )
+		GL.Viewport(0,0,N,1)
+		GL.ClearBuffer( ClearBuffer.Color, 0, result )
 		GL.UseProgram(sh_fill)
-		GL.Uniform1(loc_fill_scale, 1f / (N-1))
+		GL.Uniform1(loc_fill_scale, 1f / N)
+		GL.BeginQuery( QueryTarget.SamplesPassed, sm_query )
 		GL.BindBuffer( BufferTarget.ArrayBuffer, v_out )
 		GL.EnableVertexAttribArray(0)
 		GL.VertexAttribIPointer( 0, 1, VertexAttribIPointerType.Int, 0, IntPtr.Zero )
@@ -257,18 +270,22 @@ using win = makeWindow():
 		GL.EnableVertexAttribArray(1)
 		GL.VertexAttribIPointer( 1, 1, VertexAttribIPointerType.Int, 0, IntPtr.Zero )
 		GL.DrawArrays( BeginMode.Points, 0, N )
+		GL.EndQuery( QueryTarget.SamplesPassed )
+		GL.GetQueryObject( sm_query, GetQueryObjectParam.QueryResult, result )
+		assert result == N
 		GL.DisableVertexAttribArray(0)
 		GL.DisableVertexAttribArray(0)
-		# 2c. loop
+		GL.BindBuffer( BufferTarget.PixelPackBuffer, v_value )
+		GL.ReadPixels( 0,0,N,1, PixelFormat.RedInteger, PixelType.Int, IntPtr.Zero )
+		GL.BindBuffer( BufferTarget.PixelPackBuffer, 0 )
+		GL.BindFramebuffer( FramebufferTarget.Framebuffer, 0 )
 		readBuffer(dD,v_value)
+		# 2c. loop
 		jump *= 2
 		break	if jump>=N
 	# check
-	dI = array[of int](N)
 	readBuffer(dI,v_index)
-	dV = array[of int](N)
 	readBuffer(dV,v_value)
-	dI[0] = dV[0] = 0
 	#3. read data back
 	#4. clean up
 	GL.DeleteTexture(tex_val)
