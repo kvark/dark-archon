@@ -34,8 +34,10 @@
     <DefineConstants>TRACE</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Archon.boo" />
     <Compile Include="AssemblyInfo.boo" />
     <Compile Include="Main.boo" />
+    <Compile Include="Tool.boo" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="OpenTK">
