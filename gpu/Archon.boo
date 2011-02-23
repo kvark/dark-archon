@@ -35,6 +35,7 @@ public class Archon:
 	# variables
 	private	N		as int	= 0
 	private off		as int	= 0
+	private final	debug	= false
 	
 	# methods
 	public def constructor():
@@ -150,8 +151,7 @@ public class Archon:
 		GL.BindTexture( TextureTarget.TextureBuffer, texVal )
 		GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, 0, bufIndex )
 		GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, 1, bufValue )
-		using tf.catch():
-			GL.DrawArrays( BeginMode.Points, 0, N )
+		tf.draw(0,N)
 
 	private def stage_sort() as void:
 		GL.BindBuffer( BufferTarget.ArrayBuffer, bufValue )
@@ -173,8 +173,7 @@ public class Archon:
 			GL.BindBuffer( BufferTarget.ArrayBuffer, 0 )
 			GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, 0, bufOut )
 			GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, 1, bufDebug )
-			using tf.catch():
-				GL.DrawArrays( BeginMode.Points, off, num )
+			tf.draw(off,num)
 			GL.BindBuffer( BufferTarget.ArrayBuffer, bufOut )
 			GL.BindBuffer( BufferTarget.ElementArrayBuffer, bufIndex )
 			GL.CopyBufferSubData( BufferTarget.ArrayBuffer, BufferTarget.ElementArrayBuffer, IntPtr.Zero, ioff, inum )
@@ -187,16 +186,15 @@ public class Archon:
 		kDiff.bind()
 		GL.Uniform1(locDiffTex,0)
 		GL.BindBufferRange( BufferTarget.TransformFeedbackBuffer, 0, bufOut, IntPtr(4), IntPtr(N*4) )
-		using tf.catch():
-			GL.DrawArrays( BeginMode.Points, 0, N )
+		tf.draw(0,N)
 		GL.BindBuffer( BufferTarget.ArrayBuffer, bufOut )
 		GL.CopyBufferSubData( BufferTarget.ArrayBuffer, BufferTarget.ArrayBuffer, IntPtr(N*4), IntPtr.Zero, IntPtr(4) )
-		dV = array[of int](N+1)
-		readBuffer(dV,bufOut)
-		dV[0] = 0
+		if debug:
+			dV = array[of int](N+1)
+			readBuffer(dV,bufOut)
+			dV[0] = 0
 	
 	private def stage_sum() as void:
-		dV = array[of int](N)
 		assert not N&(N-1)	# power of 2
 		GL.BindBuffer( BufferTarget.ArrayBuffer, bufOut )
 		GL.EnableVertexAttribArray(0)
@@ -207,12 +205,13 @@ public class Archon:
 		size = N
 		while (size >>= 1):
 			GL.BindBufferRange( BufferTarget.TransformFeedbackBuffer, 0, bufValue, IntPtr(off*4), IntPtr(size*4) )
-			using tf.catch():
-				GL.DrawArrays( BeginMode.Points, 0, size )
+			tf.draw(0,size)
 			GL.BindBuffer( BufferTarget.ArrayBuffer, bufValue )
 			GL.VertexAttribIPointer(0, 2, VertexAttribIPointerType.Int, 0, IntPtr(off*4) )
 			off += size
-			readBuffer(dV,bufValue)
+			if debug:
+				dV = array[of int](N)
+				readBuffer(dV,bufValue)
 			GL.BindBuffer( BufferTarget.ArrayBuffer, 0 )
 		size = 0	# read v_value[off-1] = sum of differences
 	
@@ -220,8 +219,10 @@ public class Archon:
 		size = o2 = 1
 		GL.EnableVertexAttribArray(0)
 		GL.EnableVertexAttribArray(1)
-		dI = array[of int](N)
-		dV = array[of int](N)
+		if debug:
+			dI = array[of int](N)
+			dV = array[of int](N)
+		else: dI=dV=null
 		while o2>=0:
 			off -= size
 			o2 = off - size*2	# read offset
@@ -234,10 +235,9 @@ public class Archon:
 				GL.VertexAttribIPointer(0, 2, VertexAttribIPointerType.Int, 0, IntPtr(o2*4) )
 			GL.BindBuffer( BufferTarget.ArrayBuffer, 0 )
 			GL.BindBufferRange( BufferTarget.TransformFeedbackBuffer, 0, bufValue, IntPtr((off+size)*4), IntPtr(size*4) )
-			using tf.catch():
-				GL.DrawArrays( BeginMode.Points, 0, size )
-			assert tf.result() == size
-			readBuffer(dV,bufValue)
+			tf.draw(0,size)
+			if debug:
+				readBuffer(dV,bufValue)
 			kOff.bind()
 			GL.BindBuffer( BufferTarget.ArrayBuffer, bufValue )
 			GL.VertexAttribIPointer(0, 1, VertexAttribIPointerType.Int, 0, IntPtr(off*4) )
@@ -249,8 +249,9 @@ public class Archon:
 				GL.BindBufferRange( BufferTarget.TransformFeedbackBuffer, 0, bufValue, IntPtr(o2*4), IntPtr(size*2*4) )
 			using tf.catch():
 				GL.DrawArrays( BeginMode.Points, 0, size )
-			if o2<0:	readBuffer(dI,bufOut)
-			else:		readBuffer(dV,bufValue)
+			if debug:
+				if o2<0:	readBuffer(dI,bufOut)
+				else:		readBuffer(dV,bufValue)
 			size <<= 1
 		assert not off
 	
@@ -275,9 +276,10 @@ public class Archon:
 		GL.BindBuffer( BufferTarget.PixelPackBuffer, bufValue )
 		GL.ReadPixels( 0,0,N,1, PixelFormat.RedInteger, PixelType.Int, IntPtr.Zero )
 		GL.BindBuffer( BufferTarget.PixelPackBuffer, 0 )
-		dV = array[of int](N)
-		readBuffer(dV,bufValue)
-		dV[0]=0
+		if debug:
+			dV = array[of int](N)
+			readBuffer(dV,bufValue)
+			dV[0]=0
 
 	private def stage_out() as void:
 		GL.BindTexture( TextureTarget.TextureBuffer, texVal )
@@ -290,8 +292,7 @@ public class Archon:
 		GL.Uniform1(locOutTex,0)
 		GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, 0, bufOut )
 		assert not (N&3)
-		using tf.catch():
-			GL.DrawArrays( BeginMode.Points, 0, N>>2 )
+		tf.draw(0,N>>2)
 
 	private def stage_exit(data as (byte)) as int:
 		assert data.Length == N

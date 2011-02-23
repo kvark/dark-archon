@@ -107,3 +107,7 @@ public class TransFeedback(Query):
 		mode = (BeginFeedbackMode.Points, BeginFeedbackMode.Lines, BeginFeedbackMode.Triangles)[nv-1]
 	public override def catch() as Catcher:
 		return CatcherFeed(self,mode)
+	public def draw(off as int, num as int) as void:
+		using catch():
+			GL.DrawArrays( BeginMode.Points, off, num )
+		assert result() == num
