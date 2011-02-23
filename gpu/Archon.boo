@@ -77,27 +77,27 @@ public class Archon:
 	public def process(input as (byte)) as int:
 		N = input.Length
 		GL.BindVertexArray(vao)
-		stage_load(input)
+		stage_load(input)	# input->Data
 		cleanup()
-		stage_init()
+		stage_init()		# Data->Value (first 4 symbols), init Index
 		cleanup()
 		jump = 4
 		while true:
-			stage_sort()
+			stage_sort()	# Value,Index->Out->Index (sort)
 			cleanup()
 			break	if jump>=N
-			stage_diff()
+			stage_diff()	# Value,Index->Out (diff)
 			cleanup()
-			stage_sum()
+			stage_sum()		# Out->Value (sum bitree)
 			cleanup()
-			stage_off()
+			stage_off()		# Value->Out (off bitree)
 			cleanup()
-			stage_fill()
+			stage_fill()	# Out,Index->Value (scatter back)
 			cleanup()
 			jump *= 2
-		stage_out()
-		cleanup()
-		return stage_exit(input)
+		stage_out()	# Value,Index->Out (BWT)
+		cleanup()	# read back data and zero index
+		return stage_exit(input)	# Out->output
 	
 	# implementation details
 	
