@@ -1,0 +1,14 @@
+#version 130
+
+in	ivec4	at_ind;
+out	uint	to_sym;
+
+uniform	usamplerBuffer	unit_data;
+
+void main()	{
+	to_sym =
+		(texelFetch(unit_data,at_ind[0]).r<<0)+
+		(texelFetch(unit_data,at_ind[1]).r<<8)+
+		(texelFetch(unit_data,at_ind[2]).r<<16)+
+		(texelFetch(unit_data,at_ind[3]).r<<24);
+}
