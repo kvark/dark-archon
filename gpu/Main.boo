@@ -5,6 +5,8 @@ import OpenTK
 import OpenTK.Graphics
 import OpenTK.Graphics.OpenGL
 
+#todo: encapsulate into a class
+
 
 def makeWindow() as GameWindow:
 	dd = DisplayDevice.Default
@@ -53,6 +55,7 @@ def readBuffer(data as (int), vbo as uint) as void:
 
 using win = makeWindow():
 	print win.Title
+	earlyExit = false
 	data = (of byte: 5,3,2,4)
 	N = data.Length
 	v_data = v_ar = -1
@@ -61,9 +64,11 @@ using win = makeWindow():
 	#0. load data
 	GL.BindVertexArray(v_ar)
 	GL.BindBuffer( BufferTarget.ArrayBuffer, v_data )
-	GL.BufferData( BufferTarget.ArrayBuffer, IntPtr(N+3), IntPtr.Zero, BufferUsageHint.StaticDraw )
-	GL.BufferSubData( BufferTarget.ArrayBuffer, IntPtr.Zero, IntPtr(N), data )
-	GL.CopyBufferSubData( BufferTarget.ArrayBuffer, BufferTarget.ArrayBuffer, IntPtr.Zero, IntPtr(N), IntPtr(3) )
+	GL.BufferData( BufferTarget.ArrayBuffer, IntPtr(N+4), IntPtr.Zero, BufferUsageHint.StaticDraw )
+	GL.BufferSubData( BufferTarget.ArrayBuffer, IntPtr(1), IntPtr(N), data )
+	assert N>=3
+	GL.CopyBufferSubData( BufferTarget.ArrayBuffer, BufferTarget.ArrayBuffer, IntPtr(N), IntPtr(0), IntPtr(1) )
+	GL.CopyBufferSubData( BufferTarget.ArrayBuffer, BufferTarget.ArrayBuffer, IntPtr(1), IntPtr(N+1), IntPtr(3) )
 	#1a. prepare buffers
 	v_index = v_value = -1
 	GL.GenBuffers(1,v_index)
@@ -77,7 +82,7 @@ using win = makeWindow():
 	GL.BindBuffer( BufferTarget.ArrayBuffer, v_data )
 	for i in range(4): # bypassing uint stride=1 hardware limitation
 		GL.EnableVertexAttribArray(i)
-		GL.VertexAttribIPointer( i, 1, VertexAttribIPointerType.UnsignedByte, 1, IntPtr(i) )
+		GL.VertexAttribIPointer( i, 1, VertexAttribIPointerType.UnsignedByte, 1, IntPtr(i+1) )
 	GL.UseProgram(sh_init)
 	GL.Enable( EnableCap.RasterizerDiscard )
 	tf_query = sm_query = -1
@@ -120,6 +125,8 @@ using win = makeWindow():
 	sh_off	= makeShader( ('sh/off.glv',), ('at_sum','at_one'), ('to_off',) )
 	sh_fill	= makeShader( ('sh/fill.glv','sh/fill.glf'), ('at_val','at_ind'), null )
 	loc_fill_scale	= GL.GetUniformLocation(sh_fill,'scale')
+	sh_out	= makeShader( ('sh/out.glv',), ('at_ind',), ('to_sym',) )
+	loc_out_tex		= GL.GetUniformLocation(sh_out,'unit_data')
 	v_out = -1
 	GL.GenBuffers(1,v_out)
 	GL.BindBuffer( BufferTarget.ArrayBuffer, v_out )
@@ -149,7 +156,7 @@ using win = makeWindow():
 		for i in range(N+N-3):
 			readBuffer(dI,v_index)
 			off = i & 1
-			GL.Uniform1(loc_sort_step,off)
+			GL.Uniform1(loc_sort_step,i)
 			num = Math.Min(i,N+N-4-i) + 2-off
 			ioff = IntPtr(off*4)
 			inum = IntPtr(num*4)
@@ -170,6 +177,7 @@ using win = makeWindow():
 		for i in range(3):
 			GL.DisableVertexAttribArray(i)
 		readBuffer(dI,v_index)
+		break	if jump>=N
 		# 2b. update V
 		# 2b0 - get neighbour differences
 		GL.BindBuffer( BufferTarget.ArrayBuffer, v_index )
@@ -190,6 +198,7 @@ using win = makeWindow():
 			GL.DisableVertexAttribArray(i)
 		readBuffer(dD,v_out)
 		# 2b1 - sum up differences
+		assert not N&(N-1)	# power of 2
 		GL.BindBuffer( BufferTarget.ArrayBuffer, v_out )
 		GL.EnableVertexAttribArray(0)
 		GL.VertexAttribIPointer(0, 2, VertexAttribIPointerType.Int, 0, IntPtr.Zero )
@@ -209,6 +218,8 @@ using win = makeWindow():
 			off += size
 			readBuffer(dD,v_value)
 			GL.BindBuffer( BufferTarget.ArrayBuffer, 0 )
+		size = 0	# read v_value[off-1] = sum of differences
+		break	if earlyExit and size == N
 		# 2b2 - compose offsets
 		readBuffer(dI,v_out)
 		size = 1
@@ -285,11 +296,35 @@ using win = makeWindow():
 		readBuffer(dD,v_value)
 		# 2c. loop
 		jump *= 2
-		break	if jump>=N
 	# check
+	# produce BWT output
+	GL.BindTexture( TextureTarget.TextureBuffer, tex_val )
+	GL.TexBuffer( TextureBufferTarget.TextureBuffer, SizedInternalFormat.R8ui, v_data )
+	GL.Enable( EnableCap.RasterizerDiscard )
+	GL.EnableVertexAttribArray(0)
+	GL.BindBuffer( BufferTarget.ArrayBuffer, v_index )
+	GL.VertexAttribIPointer( 0, 4, VertexAttribIPointerType.Int, 0, IntPtr.Zero )
+	GL.UseProgram(sh_out)
+	GL.Uniform1(loc_out_tex,0)
+	GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, 0, v_out )
+	GL.BeginTransformFeedback( BeginFeedbackMode.Points )
+	GL.BeginQuery( QueryTarget.TransformFeedbackPrimitivesWritten, tf_query )
+	assert not (N&3)
+	GL.DrawArrays( BeginMode.Points, 0, N>>2 )
+	GL.EndQuery( QueryTarget.TransformFeedbackPrimitivesWritten )
+	GL.EndTransformFeedback()
+	GL.BindBuffer( BufferTarget.ArrayBuffer, 0 )
+	GL.DisableVertexAttribArray(0)
+	GL.Disable( EnableCap.RasterizerDiscard )
+	#3. read data back
 	readBuffer(dI,v_index)
 	readBuffer(dV,v_value)
-	#3. read data back
+	zero = (of int:-1)
+	readBuffer(zero,v_value)
+	GL.BindBuffer( BufferTarget.ArrayBuffer, v_out )
+	buf = GL.MapBuffer( BufferTarget.ArrayBuffer, BufferAccess.ReadOnly )
+	Marshal.Copy( buf, data, 0, data.Length )
+	GL.UnmapBuffer( BufferTarget.ArrayBuffer )
 	#4. clean up
 	GL.DeleteTexture(tex_val)
 	GL.DeleteFramebuffers(1,fbo)

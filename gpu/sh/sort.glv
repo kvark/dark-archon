@@ -8,7 +8,7 @@ uniform usamplerBuffer	unit_val;
 
 
 void main()	{
-	int odd = (gl_VertexID+step) & 1;	// comparison direction (0=forward,1=backward)
+	int odd = gl_VertexID & 1;	// comparison direction (0=forward,1=backward)
 	int i0 = at_ib, i1 = at_ia*odd + at_ic*(1-odd);	// current and destination indices
 	uint v0 = texelFetch(unit_val,i0).x;		// src value
 	uint v1 = texelFetch(unit_val,i1).x;		// dst value
@@ -18,5 +18,5 @@ void main()	{
 	}
 	if((v1>v0) == (odd==0))	to_index = i0;	// it's OK, leave it untouched
 	else			to_index = i1;	// grab another one to fix that
-	to_debug = odd;
+	to_debug = gl_VertexID;
 }
