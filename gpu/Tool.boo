@@ -75,7 +75,9 @@ public class Query:
 		qid,target = tmp,targ
 	def destructor():
 		tmp = qid
-		GL.DeleteQueries(1,tmp)
+		try: GL.DeleteQueries(1,tmp)
+		except e as  OpenTK.Graphics.GraphicsContextMissingException:
+			pass
 	public virtual def catch() as Catcher:
 		return Catcher(self)
 	public def result() as int:
