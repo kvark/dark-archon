@@ -101,6 +101,7 @@ public class CatcherFeed(Catcher):
 		GL.Disable( EnableCap.RasterizerDiscard )
 
 public class TransFeedback(Query):
+	public counter		= 0
 	public final mode	as BeginFeedbackMode
 	public def constructor(nv as byte):
 		super( QueryTarget.TransformFeedbackPrimitivesWritten )
@@ -108,6 +109,7 @@ public class TransFeedback(Query):
 	public override def catch() as Catcher:
 		return CatcherFeed(self,mode)
 	public def draw(off as int, num as int) as void:
+		++counter
 		using catch():
 			GL.DrawArrays( BeginMode.Points, off, num )
 		assert result() == num

@@ -1,0 +1,21 @@
+#version 130
+
+out	int	to_index, to_debug;
+uniform usamplerBuffer	unit_val;
+
+bool get_elements(out ivec2);
+
+
+void main()	{
+	ivec2 ti;	// current and destination indices
+	bool fw = get_elements(ti);
+	uint v0 = texelFetch(unit_val,ti.x).x;		// src value
+	uint v1 = texelFetch(unit_val,ti.y).x;		// dst value
+	if(v0==v1)	{				// go a step deeper
+		v0 = texelFetch(unit_val,ti.x+1).x;
+		v1 = texelFetch(unit_val,ti.y+1).x;
+	}
+	if((v1>v0) == fw)	to_index = ti.x;	// it's OK, leave it untouched
+	else			to_index = ti.y;	// grab another one to fix that
+	to_debug = gl_VertexID;
+}
