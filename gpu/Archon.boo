@@ -40,18 +40,18 @@ public class Archon:
 	# methods
 	public def constructor():
 		# init shaders
-		kInit	= Kernel( ('sh/init.glv',), ('at_c0','at_c1','at_c2','at_c3'), ('to_index','to_value') )
-		kSort	= Kernel( ('sh/sort.glv',), ('at_ia','at_ib','at_ic'), ('to_index','to_debug') )
+		kInit	= Kernel( ('sh/k_init.glv',), ('at_c0','at_c1','at_c2','at_c3'), ('to_index','to_value') )
+		kSort	= Kernel( ('sh/k_sort.glv','sh/s_bubble.glv'), ('at_ia','at_ib','at_ic'), ('to_index','to_debug') )
 		locSortStep		= kSort.getUniform('step')
 		locSortTex		= kSort.getUniform('unit_val')
-		kSum	= Kernel( ('sh/sum.glv',), ('at_diff',), ('to_sum',) )
-		kDiff	= Kernel( ('sh/diff.glv',), ('at_i0','at_i1'), ('to_diff',) )
+		kSum	= Kernel( ('sh/k_sum.glv',), ('at_diff',), ('to_sum',) )
+		kDiff	= Kernel( ('sh/k_diff.glv',), ('at_i0','at_i1'), ('to_diff',) )
 		locDiffTex		= kDiff.getUniform('unit_val')
-		kEven	= Kernel( ('sh/even.glv',), ('at_off',), ('to_one',) )
-		kOff	= Kernel( ('sh/off.glv',), ('at_sum','at_one'), ('to_off',) )
-		kFill	= Kernel( ('sh/fill.glv','sh/fill.glf'), ('at_val','at_ind'), null )
+		kEven	= Kernel( ('sh/k_even.glv',), ('at_off',), ('to_one',) )
+		kOff	= Kernel( ('sh/k_off.glv',), ('at_sum','at_one'), ('to_off',) )
+		kFill	= Kernel( ('sh/k_fill.glv','sh/k_fill.glf'), ('at_val','at_ind'), null )
 		locFillScale	= kFill.getUniform('scale')
-		kOut	= Kernel( ('sh/out.glv',), ('at_ind',), ('to_sym',) )
+		kOut	= Kernel( ('sh/k_out.glv',), ('at_ind',), ('to_sym',) )
 		locOutTex		= kOut.getUniform('unit_data')
 		# init buffers
 		bufs = (-1,-1,-1,-1,-1)
