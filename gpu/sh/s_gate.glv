@@ -1,0 +1,13 @@
+#version 130
+
+in	int	at_ia, at_ib, at_ic;
+
+int get_direction();
+
+ivec3 get_elements()	{
+	int dir = get_direction(), target =
+		at_ia * max(0,-dir)+
+		at_ib * (1-dir*dir)+
+		at_ic * max(0,+dir);
+	return ivec3( at_ib, target, dir );
+} 
