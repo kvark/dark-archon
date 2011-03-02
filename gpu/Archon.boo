@@ -14,7 +14,6 @@ public class Archon:
 	private final	kOff	as Kernel
 	private final	kFill	as Kernel
 	private final	kOut	as Kernel
-	private	final	locSortStep		as int
 	private	final	locSortTex		as int
 	private	final	locDiffTex		as int
 	private	final	locFillScale	as int
@@ -41,8 +40,7 @@ public class Archon:
 	public def constructor():
 		# init shaders
 		kInit	= Kernel( ('sh/k_init.glv',), ('at_c0','at_c1','at_c2','at_c3'), ('to_index','to_value') )
-		kSort	= Kernel( ('sh/k_sort.glv','sh/s_bubble.glv'), ('at_ia','at_ib','at_ic'), ('to_index','to_debug') )
-		locSortStep		= kSort.getUniform('step')
+		kSort	= Kernel( ('sh/k_sort.glv','sh/s_bubble.glv','sh/s_gate.glv'), ('at_ia','at_ib','at_ic'), ('to_index','to_debug') )
 		locSortTex		= kSort.getUniform('unit_val')
 		kSum	= Kernel( ('sh/k_sum.glv',), ('at_diff',), ('to_sum',) )
 		kDiff	= Kernel( ('sh/k_diff.glv',), ('at_i0','at_i1'), ('to_diff',) )
@@ -87,7 +85,7 @@ public class Archon:
 		cleanup()
 		jump = 4
 		while true:
-			stage_sort()	# Value,Index->Out->Index (sort)
+			stage_sort_bubble()	# Value,Index->Out->Index (sort)
 			cleanup()
 			break	if N>4 and jump>=N
 			stage_diff()	# Value,Index->Out (diff)
@@ -153,7 +151,7 @@ public class Archon:
 		GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, 1, bufValue )
 		tf.draw(0,N)
 
-	private def stage_sort() as void:
+	private def stage_sort_bubble() as void:
 		GL.BindBuffer( BufferTarget.ArrayBuffer, bufValue )
 		GL.CopyBufferSubData( BufferTarget.ArrayBuffer, BufferTarget.ArrayBuffer, IntPtr.Zero, IntPtr(N*4), IntPtr(4) )
 		#bind index [-1,0,1]
@@ -166,7 +164,6 @@ public class Archon:
 		for i in range(N+N-3):
 			#readBuffer(dI,v_index)
 			off = i & 1
-			GL.Uniform1(locSortStep,i)
 			num = Math.Min(i,N+N-4-i) + 2-off
 			ioff = IntPtr(off*4)
 			inum = IntPtr(num*4)
@@ -177,6 +174,29 @@ public class Archon:
 			GL.BindBuffer( BufferTarget.ArrayBuffer, bufOut )
 			GL.BindBuffer( BufferTarget.ElementArrayBuffer, bufIndex )
 			GL.CopyBufferSubData( BufferTarget.ArrayBuffer, BufferTarget.ElementArrayBuffer, IntPtr.Zero, ioff, inum )
+		
+	private def sort(number as int, step as int, getInd as callable(int) as int) as void:
+		pass
+
+	private def stage_sort_oem() as void:
+		listLog = 0
+		while N>>++listLog:
+			step = 1<<(listLog-1)
+			sort( N>>1, step ) do(i as int):
+				chunk = i>>(listLog-1)
+				rem = i&(step-1)
+				return (chunk<<listLog) + rem
+			while (step>>=1) >= 1:
+				continue	if listLog==1
+				numChunks = N>>listLog
+				numIxPerChunk = ((1<<listLog) - (step<<1))>>1
+				sort( numChunks*numIxPerChunk, step ) do(i as int):
+					chunk = i / numIxPerChunk
+					rem = i - chunk*numIxPerChunk
+					swapChunk = rem / step
+					swapRem = rem - swapChunk * step
+					return (chunk<<listLog) + (2*swapChunk+1)*step + swapRem
+
 
 	private def stage_diff() as void:
 		GL.BindBuffer( BufferTarget.ArrayBuffer, bufIndex )

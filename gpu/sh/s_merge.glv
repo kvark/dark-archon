@@ -1,0 +1,15 @@
+#version 130
+// Odd-Even Merge Sort
+// http://www.gpgpu.org/forums/viewtopic.php?p=14347&sid=d960f0f7d463be734196c29ee6d8e3ff
+
+uniform	int	nim, stepper, list_log, num_chunks;
+
+int get_direction()	{
+	int Ci		= gl_VertexID;
+	int chunk	= Ci >> list_log;
+	if (chunk<0 || chunk>=num_chunks)
+		return 0;
+	//int swapRem	= Ci % stepper;
+	//int swapChunk	= ((Ci - swapRem - (chunk<<list_log))/stepper - 1)>>1;
+	return 2 * ((Ci - swapRem*stepper) & 1) - 1;
+} 

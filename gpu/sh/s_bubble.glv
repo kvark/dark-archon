@@ -1,10 +1,5 @@
 #version 130
 
-in	int	at_ia, at_ib, at_ic;
-uniform	int	step;
-
-bool get_elements(out ivec2 ti)	{
-	int odd = gl_VertexID & 1;
-	ti = ivec2(at_ib, at_ia*odd + at_ic*(1-odd));
-	return odd == 0;	//is forward
+int get_direction()	{
+	return 1-2*(gl_VertexID&1);
 } 
