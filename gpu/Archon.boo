@@ -15,6 +15,10 @@ public class Archon:
 	private final	kFill	as Kernel
 	private final	kOut	as Kernel
 	private	final	locSortTex		as int
+	private	final	locSortPms		as int
+	private final	locSortStep		as int
+	private final	locSortLog		as int
+	private final	locSortTotal	as int
 	private	final	locDiffTex		as int
 	private	final	locFillScale	as int
 	private	final	locOutTex		as int
@@ -34,14 +38,19 @@ public class Archon:
 	# variables
 	private	N		as int	= 0
 	private off		as int	= 0
-	private final	debug	= false
+	private final	debug		= true
+	private final	sortFunc	= 'merge'
 	
 	# methods
 	public def constructor():
 		# init shaders
 		kInit	= Kernel( ('sh/k_init.glv',), ('at_c0','at_c1','at_c2','at_c3'), ('to_index','to_value') )
-		kSort	= Kernel( ('sh/k_sort.glv','sh/s_bubble.glv','sh/s_gate.glv'), ('at_ia','at_ib','at_ic'), ('to_index','to_debug') )
+		kSort	= Kernel( ('sh/k_sort.glv',"sh/s_${sortFunc}.glv",'sh/s_gate.glv'), ('at_ia','at_ib','at_ic'), ('to_index','to_debug') )
 		locSortTex		= kSort.getUniform('unit_val')
+		locSortPms		= kSort.getUniform('pms')
+		locSortStep		= kSort.getUniform('stepper')
+		locSortLog		= kSort.getUniform('list_log')
+		locSortTotal	= kSort.getUniform('total')
 		kSum	= Kernel( ('sh/k_sum.glv',), ('at_diff',), ('to_sum',) )
 		kDiff	= Kernel( ('sh/k_diff.glv',), ('at_i0','at_i1'), ('to_diff',) )
 		locDiffTex		= kDiff.getUniform('unit_val')
@@ -85,7 +94,7 @@ public class Archon:
 		cleanup()
 		jump = 4
 		while true:
-			stage_sort_bubble()	# Value,Index->Out->Index (sort)
+			stage_sort_oem()	# Value,Index->Out->Index (sort)
 			cleanup()
 			break	if N>4 and jump>=N
 			stage_diff()	# Value,Index->Out (diff)
@@ -152,6 +161,7 @@ public class Archon:
 		tf.draw(0,N)
 
 	private def stage_sort_bubble() as void:
+		assert sortFunc == 'bubble'
 		GL.BindBuffer( BufferTarget.ArrayBuffer, bufValue )
 		GL.CopyBufferSubData( BufferTarget.ArrayBuffer, BufferTarget.ArrayBuffer, IntPtr.Zero, IntPtr(N*4), IntPtr(4) )
 		#bind index [-1,0,1]
@@ -175,27 +185,41 @@ public class Archon:
 			GL.BindBuffer( BufferTarget.ElementArrayBuffer, bufIndex )
 			GL.CopyBufferSubData( BufferTarget.ArrayBuffer, BufferTarget.ElementArrayBuffer, IntPtr.Zero, ioff, inum )
 		
-	private def sort(number as int, step as int, getInd as callable(int) as int) as void:
-		pass
+
+	private def merge_pass(step as int, log as int) as void:
+		# setup program
+		kSort.bind()
+		pms = (step<<1) == (1<<log)
+		GL.Uniform1( locSortPms,	(0,1)[pms]	)
+		GL.Uniform1( locSortStep,	step	)
+		GL.Uniform1( locSortLog,	log		)
+		GL.Uniform1( locSortTotal,	N>>log	)
+		# transform feedback
+		GL.BindBuffer( BufferTarget.ArrayBuffer, bufIndex )
+		for i in range(3):
+			GL.VertexAttribIPointer( i, 1, VertexAttribIPointerType.Int, 0, IntPtr((i-1)*4*step) )
+		GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, 0, bufOut )
+		GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, 1, bufDebug )
+		tf.draw(0,N)
+		# copy back
+		if debug:
+			dI = array[of int](N)
+			dV = array[of int](N)
+			readBuffer(dI,bufIndex)
+			readBuffer(dV,bufOut)
+		GL.BindBuffer( BufferTarget.ArrayBuffer, bufOut )
+		GL.BindBuffer( BufferTarget.ElementArrayBuffer, bufIndex )
+		GL.CopyBufferSubData( BufferTarget.ArrayBuffer, BufferTarget.ElementArrayBuffer, IntPtr.Zero, IntPtr.Zero, IntPtr(N*4) )
 
 	private def stage_sort_oem() as void:
-		listLog = 0
-		while N>>++listLog:
-			step = 1<<(listLog-1)
-			sort( N>>1, step ) do(i as int):
-				chunk = i>>(listLog-1)
-				rem = i&(step-1)
-				return (chunk<<listLog) + rem
+		assert sortFunc == 'merge'
+		for i in range(3):
+			GL.EnableVertexAttribArray(i)
+		log = 0
+		while N>>++log:
+			step = 1<<log
 			while (step>>=1) >= 1:
-				continue	if listLog==1
-				numChunks = N>>listLog
-				numIxPerChunk = ((1<<listLog) - (step<<1))>>1
-				sort( numChunks*numIxPerChunk, step ) do(i as int):
-					chunk = i / numIxPerChunk
-					rem = i - chunk*numIxPerChunk
-					swapChunk = rem / step
-					swapRem = rem - swapChunk * step
-					return (chunk<<listLog) + (2*swapChunk+1)*step + swapRem
+				merge_pass(step,log)
 
 
 	private def stage_diff() as void:

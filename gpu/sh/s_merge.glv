@@ -1,15 +1,19 @@
 #version 130
 // Odd-Even Merge Sort
+// http://http.developer.nvidia.com/GPUGems2/gpugems2_chapter46.html
+// http://www.inf.fh-flensburg.de/lang/algorithmen/sortieren/networks/oemen.htm
 // http://www.gpgpu.org/forums/viewtopic.php?p=14347&sid=d960f0f7d463be734196c29ee6d8e3ff
 
-uniform	int	nim, stepper, list_log, num_chunks;
+
+uniform	int	pms, stepper, list_log, total;
 
 int get_direction()	{
 	int Ci		= gl_VertexID;
-	int chunk	= Ci >> list_log;
-	if (chunk<0 || chunk>=num_chunks)
-		return 0;
-	//int swapRem	= Ci % stepper;
-	//int swapChunk	= ((Ci - swapRem - (chunk<<list_log))/stepper - 1)>>1;
-	return 2 * ((Ci - swapRem*stepper) & 1) - 1;
-} 
+	int odd		= (1-pms+Ci/stepper) & 1;	//1 == high
+	int low		= Ci - (0+odd)*stepper;
+	int hai		= Ci + (1-odd)*stepper;
+	//are they in one group?
+	if ((low>>list_log) == (hai>>list_log))
+		return 1-2*odd;
+	else	return 0;
+}
