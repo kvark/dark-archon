@@ -20,6 +20,7 @@ public class Archon:
 	private final	locSortLog		as int
 	private	final	locDiffTex		as int
 	private	final	locFillScale	as int
+	private	final	locFillLog		as int
 	private	final	locOutTex		as int
 	# buffer objects
 	private final	vao			as int
@@ -37,11 +38,17 @@ public class Archon:
 	# variables
 	private	N		as int	= 0
 	private off		as int	= 0
-	private final	debug		= true
+	private height	as int	= 0
+	private final	texSizeLog	as int
+	private final	debug		= false
 	private final	sortFunc	= 'merge'
 	
 	# methods
 	public def constructor():
+		texSize = texSizeLog = 0
+		GL.GetInteger( GetPName.MaxTextureSize, texSize )
+		assert not (texSize & (texSize-1))
+		while (texSize>>++texSizeLog)>1: pass
 		# init shaders
 		kInit	= Kernel( ('sh/k_init.glv',), ('at_c0','at_c1','at_c2','at_c3'), ('to_index','to_value') )
 		kSort	= Kernel( ('sh/k_sort.glv',"sh/s_${sortFunc}.glv",'sh/s_gate.glv'), ('at_ia','at_ib','at_ic'), ('to_index','to_debug') )
@@ -56,6 +63,7 @@ public class Archon:
 		kOff	= Kernel( ('sh/k_off.glv',), ('at_sum','at_one'), ('to_off',) )
 		kFill	= Kernel( ('sh/k_fill.glv','sh/k_fill.glf'), ('at_val','at_ind'), null )
 		locFillScale	= kFill.getUniform('scale')
+		locFillLog		= kFill.getUniform('size_log')
 		kOut	= Kernel( ('sh/k_out.glv',), ('at_ind',), ('to_sym',) )
 		locOutTex		= kOut.getUniform('unit_data')
 		# init buffers
@@ -85,6 +93,7 @@ public class Archon:
 	# perform complete BWT, override input and return original index
 	public def process(input as (byte)) as int:
 		N = input.Length
+		height = ((N-1)>>texSizeLog)+1
 		GL.BindVertexArray(vao)
 		stage_load(input)	# input->Data
 		cleanup()
@@ -133,12 +142,15 @@ public class Archon:
 		assert N>=3
 		GL.CopyBufferSubData( BufferTarget.ArrayBuffer, BufferTarget.ArrayBuffer, IntPtr(N), IntPtr(0), IntPtr(1) )
 		GL.CopyBufferSubData( BufferTarget.ArrayBuffer, BufferTarget.ArrayBuffer, IntPtr(1), IntPtr(N+1), IntPtr(3) )
-		for buf in (bufIndex,bufValue,bufOut,bufDebug):
+		for buf in (bufIndex,bufOut,bufDebug):
 			GL.BindBuffer( BufferTarget.ArrayBuffer, buf )
 			GL.BufferData( BufferTarget.ArrayBuffer, IntPtr(4*N+4), IntPtr.Zero, BufferUsageHint.StaticDraw )
+		GL.BindBuffer( BufferTarget.ArrayBuffer, bufValue )
+		GL.BufferData( BufferTarget.ArrayBuffer, IntPtr(4*(height<<texSizeLog)), IntPtr.Zero, BufferUsageHint.StaticDraw )
 		# textures
 		GL.BindTexture( TextureTarget.Texture2D, texTmp )
-		GL.TexImage2D( TextureTarget.Texture2D, 0, PixelInternalFormat.R32i, N,1,0, PixelFormat.RedInteger, PixelType.Int, IntPtr.Zero )
+		GL.TexImage2D( TextureTarget.Texture2D, 0, PixelInternalFormat.R32i, 1<<texSizeLog, height,0,
+			PixelFormat.RedInteger, PixelType.Int, IntPtr.Zero )
 		GL.BindTexture( TextureTarget.TextureBuffer, texVal )
 		GL.TexBuffer( TextureBufferTarget.TextureBuffer, SizedInternalFormat.R32ui, bufValue )
 		GL.BindFramebuffer( FramebufferTarget.Framebuffer, fbo )
@@ -296,10 +308,13 @@ public class Archon:
 		result = -1	# ClearBuffer doesn't work properly with non-zero values
 		GL.BindFramebuffer( FramebufferTarget.Framebuffer, fbo )
 		GL.DrawBuffer( DrawBufferMode.ColorAttachment0 )
-		GL.Viewport(0,0,N,1)
+		width = 1<<texSizeLog
+		GL.Viewport(0,0,width,height)
 		GL.ClearBuffer( ClearBuffer.Color, 0, result )
 		kFill.bind()
-		GL.Uniform1(locFillScale, 1f / N)
+		vs = OpenTK.Vector2(1f / width, 1f / height)
+		GL.Uniform2(locFillScale,vs)
+		GL.Uniform1(locFillLog,texSizeLog)
 		using qSamples.catch():
 			GL.BindBuffer( BufferTarget.ArrayBuffer, bufOut )
 			GL.EnableVertexAttribArray(0)
@@ -311,7 +326,7 @@ public class Archon:
 		result = qSamples.result()
 		assert result == N
 		GL.BindBuffer( BufferTarget.PixelPackBuffer, bufValue )
-		GL.ReadPixels( 0,0,N,1, PixelFormat.RedInteger, PixelType.Int, IntPtr.Zero )
+		GL.ReadPixels( 0,0,width,height, PixelFormat.RedInteger, PixelType.Int, IntPtr.Zero )
 		GL.BindBuffer( BufferTarget.PixelPackBuffer, 0 )
 		if debug:
 			dV = array[of int](N)
