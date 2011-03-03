@@ -3,9 +3,12 @@
 in	int	at_val, at_ind;
 out	int	to_val;
 
-uniform	float scale;
+uniform	int	size_log;
+uniform	vec2	scale;
 
 void main()	{
 	to_val = at_val;
-	gl_Position = vec4( float(2*at_ind+1)*scale - 1.0, 0.0,0.0,1.0);
+	int y = at_ind>>size_log;
+	ivec2 tc = ivec2( at_ind - (y<<size_log), y );
+	gl_Position = vec4( vec2(2*tc+ivec2(1))*scale - vec2(1.0), 0.0,1.0);
 }
