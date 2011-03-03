@@ -18,7 +18,6 @@ public class Archon:
 	private	final	locSortPms		as int
 	private final	locSortStep		as int
 	private final	locSortLog		as int
-	private final	locSortTotal	as int
 	private	final	locDiffTex		as int
 	private	final	locFillScale	as int
 	private	final	locOutTex		as int
@@ -50,7 +49,6 @@ public class Archon:
 		locSortPms		= kSort.getUniform('pms')
 		locSortStep		= kSort.getUniform('stepper')
 		locSortLog		= kSort.getUniform('list_log')
-		locSortTotal	= kSort.getUniform('total')
 		kSum	= Kernel( ('sh/k_sum.glv',), ('at_diff',), ('to_sum',) )
 		kDiff	= Kernel( ('sh/k_diff.glv',), ('at_i0','at_i1'), ('to_diff',) )
 		locDiffTex		= kDiff.getUniform('unit_val')
@@ -160,6 +158,7 @@ public class Archon:
 		GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, 1, bufValue )
 		tf.draw(0,N)
 
+
 	private def stage_sort_bubble() as void:
 		assert sortFunc == 'bubble'
 		GL.BindBuffer( BufferTarget.ArrayBuffer, bufValue )
@@ -185,41 +184,35 @@ public class Archon:
 			GL.BindBuffer( BufferTarget.ElementArrayBuffer, bufIndex )
 			GL.CopyBufferSubData( BufferTarget.ArrayBuffer, BufferTarget.ElementArrayBuffer, IntPtr.Zero, ioff, inum )
 		
-
-	private def merge_pass(step as int, log as int) as void:
-		# setup program
-		kSort.bind()
-		pms = (step<<1) == (1<<log)
-		GL.Uniform1( locSortPms,	(0,1)[pms]	)
-		GL.Uniform1( locSortStep,	step	)
-		GL.Uniform1( locSortLog,	log		)
-		GL.Uniform1( locSortTotal,	N>>log	)
-		# transform feedback
-		GL.BindBuffer( BufferTarget.ArrayBuffer, bufIndex )
-		for i in range(3):
-			GL.VertexAttribIPointer( i, 1, VertexAttribIPointerType.Int, 0, IntPtr((i-1)*4*step) )
-		GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, 0, bufOut )
-		GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, 1, bufDebug )
-		tf.draw(0,N)
-		# copy back
-		if debug:
-			dI = array[of int](N)
-			dV = array[of int](N)
-			readBuffer(dI,bufIndex)
-			readBuffer(dV,bufOut)
-		GL.BindBuffer( BufferTarget.ArrayBuffer, bufOut )
-		GL.BindBuffer( BufferTarget.ElementArrayBuffer, bufIndex )
-		GL.CopyBufferSubData( BufferTarget.ArrayBuffer, BufferTarget.ElementArrayBuffer, IntPtr.Zero, IntPtr.Zero, IntPtr(N*4) )
-
 	private def stage_sort_oem() as void:
 		assert sortFunc == 'merge'
+		kSort.bind()
 		for i in range(3):
 			GL.EnableVertexAttribArray(i)
 		log = 0
 		while N>>++log:
+			GL.Uniform1(locSortPms,1)
+			GL.Uniform1(locSortLog,log)
 			step = 1<<log
 			while (step>>=1) >= 1:
-				merge_pass(step,log)
+				GL.Uniform1(locSortStep,step)
+				# transform feedback
+				GL.BindBuffer( BufferTarget.ArrayBuffer, bufIndex )
+				for i in range(3):
+					GL.VertexAttribIPointer( i, 1, VertexAttribIPointerType.Int, 0, IntPtr((i-1)*4*step) )
+				GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, 0, bufOut )
+				GL.BindBufferBase( BufferTarget.TransformFeedbackBuffer, 1, bufDebug )
+				tf.draw(0,N)
+				GL.Uniform1(locSortPms,0)
+				# copy back, TODO: don't copy
+				if debug:
+					dI = array[of int](N)
+					dV = array[of int](N)
+					readBuffer(dI,bufIndex)
+					readBuffer(dV,bufOut)
+				GL.BindBuffer( BufferTarget.ArrayBuffer, bufOut )
+				GL.BindBuffer( BufferTarget.ElementArrayBuffer, bufIndex )
+				GL.CopyBufferSubData( BufferTarget.ArrayBuffer, BufferTarget.ElementArrayBuffer, IntPtr.Zero, IntPtr.Zero, IntPtr(N*4) )
 
 
 	private def stage_diff() as void:
