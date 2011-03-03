@@ -5,7 +5,7 @@
 // http://www.gpgpu.org/forums/viewtopic.php?p=14347&sid=d960f0f7d463be734196c29ee6d8e3ff
 
 
-uniform	int	pms, stepper, list_log, total;
+uniform	int	pms, stepper, list_log;
 
 int get_direction()	{
 	int Ci		= gl_VertexID;
