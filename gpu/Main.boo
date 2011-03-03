@@ -11,7 +11,8 @@ gameFlags  = GameWindowFlags.Default
 
 using win = GameWindow(1,1,gm,'ArchonGPU',gameFlags,dd,3,3,conFlags):
 	print win.Title
-	data = (of byte: 5,3,2,4)
+	#data = (of byte: 5,3,2,4)
+	#data = (of byte: 8,7,6,5,4,3,2,1)
 	data = System.IO.File.ReadAllBytes('input.bin')
 	ar = Archon()
 	result = ar.process(data)
