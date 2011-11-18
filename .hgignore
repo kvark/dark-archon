@@ -2,6 +2,10 @@ syntax: glob
 
 bin
 obj
+save
 msvc*
 bugs
 *.o
+*.exe
+*.ilk
+*.pdb
