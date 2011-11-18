@@ -27,13 +27,14 @@ FILE *fi = NULL;
 
 typedef void (*f_estimate)(struct Estimation *const);
 
+// IT-1: a>=b
 
 void fit1(struct Estimation *const e)	{
 	int i, r[1<<8] = {0};
 	byte a=0,b=0;
 	fread(&a,1,1,fi);
 	while( fread(&b,1,1,fi) )	{
-		r[a] += (b>=a);
+		r[a] += (a>=b);
 		a = b;
 	}
 	for(i=0; i<(1<<8); ++i)	{
@@ -41,6 +42,8 @@ void fit1(struct Estimation *const e)	{
 	}
 	strcpy(e->name,"IT-1");
 }
+
+// IT-2: a>=b<c
 
 void fit2(struct Estimation *const e)	{
 	int i, r[1<<16] = {0};
@@ -56,6 +59,10 @@ void fit2(struct Estimation *const e)	{
 	}
 	strcpy(e->name,"IT-2");
 }
+
+// IT-1-exteme:
+// choose smallest symbol group B, sort it
+// mark AB for each A as sorted
 
 void fit1x(struct Estimation *const e)	{
 	int i, ra[1<<8] = {0}, rb[1<<16] = {0};
@@ -90,13 +97,17 @@ void fit1x(struct Estimation *const e)	{
 	strcpy(e->name,"IT-1x");
 }
 
+// IT-2-exteme:
+// choose smallest pair-symbol group BC, sort it
+// mark ABC for each symbol A as sorted
+
 static int *r_cmp = NULL;
 int cmp_word(const void *pa, const void *pb)	{
 	return r_cmp[*(word*)pa] - r_cmp[*(word*)pb];
 }
 
 void fit2x(struct Estimation *const e)	{
-	int i, min=0, r[1<<16] = {0};
+	int i, r[1<<16] = {0};
 	byte a=0,b=0,c=0;
 	int *const rx = malloc(sizeof(int)<<24);
 	word suf[1<<16];
@@ -112,20 +123,21 @@ void fit2x(struct Estimation *const e)	{
 	r_cmp = r;
 	for(i=0; i<(1<<16); ++i)
 		suf[i] = i;
-	for(;;++min)	{
+	for(i=0;;++i)	{
 		word s = 0;
-		qsort(suf+min, (1<<16)-min, sizeof(word), cmp_word);
-		while( min<(1<<16) && r[suf[min]]<=0 )
-			++min;
-		if(min == (1<<16))
+		int j;
+		qsort(suf+i, (1<<16)-i, sizeof(word), cmp_word);
+		while( i<(1<<16) && r[suf[i]]<=0 )
+			++i;
+		if(i == (1<<16))
 			break;
-		s = suf[min];
+		s = suf[i];
 		sort(e,r[s]);
 		r[s] = 0;
-		for(i=0; i<(1<<8); ++i)	{
-			int *const x = r + (i<<8)+(s>>8);
+		for(j=0; j<(1<<8); ++j)	{
+			int *const x = r + (j<<8)+(s>>8);
 			if(*x>0)
-				*x -= rx[(i<<16)+s];
+				*x -= rx[(j<<16)+s];
 		}
 	}
 	free(rx);
