@@ -23,25 +23,62 @@ extern void optimize_matrix(int);
 extern void optimize_topo(int);
 extern void optimize_bubble(int);
 
+struct SymbolCode	{
+	dword	code;
+	byte	length;
+};
 
-dword get_key_bytes(const int bi)	{
+//	Key access method	//
+
+static dword get_key_bytes(const int bi)	{
 	return *(dword*)(source-4+(bi>>3));
 }
-dword get_key_fixed(const int bi)	{
+static dword get_key_fixed(const int bi)	{
 	const byte *const s2 = source + (bi>>3);
 	const int bit = bi & 7;
 	return (((dword)s2[0]<<24)<<(8-bit)) | (*(dword*)(s2-4)>>bit);
 }
 static dword (*const get_key)(const int) = get_key_fixed;
 
-byte get_char(const int v)	{
-	const word us = *(word*)(source+(v>>3));
-	const word d = (us >> (v&7)) & ((1<<BIT)-1);
-	return DC[d];
+//	Symbol length method	//
+
+static int symbol_length_fixed(const byte sym)	{
+	return BIT;
+}
+static int (*const symbol_length)(const byte) = symbol_length_fixed;
+
+//	Symbol decode method	//
+
+static struct SymbolCode symbol_decode_fixed(const dword data)	{
+	const struct SymbolCode sc = { data&((1<<BIT)-1), BIT };
+	return sc;
+}
+static struct SymbolCode (*const symbol_decode)(const dword) = symbol_decode_fixed;
+
+//	Symbol length on the offset method	//
+
+static byte offset_length_fixed(const int offset)	{
+	return BIT;
+}
+static byte offset_length_uni(const int offset)	{
+	//warning: this needs debugging
+	const dword key = get_key(offset);
+	const struct SymbolCode sc = symbol_decode_fixed(key);
+	return sc.length;
+}
+static byte (*const offset_length)(const int) = offset_length_fixed;
+
+
+//	Sorting		//
+
+static byte get_char(const int v)	{
+	const dword us = *(word*)(source+(v>>3)) >> (v&7);
+	const struct SymbolCode code = symbol_decode(us);
+	return DC[ code.code ];
 }
 
 
-void sort_bese(int *A, int *B, int depth)	{
+static void sort_bese(int *A, int *B, int depth)	{
 	while(A+1 < B)	{
 		int *x=A,*y=A+1,*z=B;
 		const dword U = get_key(A[0] - depth);
@@ -60,6 +97,8 @@ void sort_bese(int *A, int *B, int depth)	{
 	}
 }
 
+
+//	Global options	//
 
 struct Options	{
 	const char *nameIn,*nameOut;
@@ -110,11 +149,12 @@ struct Options read_command_line(const int ac, const char *av[])	{
 }
 
 
+
 int main(const int argc, const char *argv[])	{
 	FILE *fx = NULL;
 	time_t t0 = 0;
 	const unsigned termin = 10, SINT = sizeof(int), useItoh = 2;
-	int i,N,nd,k,base_id=-1,sorted=0;
+	int i,N,nd,k,base_id=-1,sorted=0,total_bits = 0;
 	int *P,*X,*Y; struct Options opt;
 	
 	printf("Var BWT: Radix+BeSe\n");
@@ -167,6 +207,7 @@ int main(const int argc, const char *argv[])	{
 	nd = CD[0xFF] + (R1[0xFF] ? 1:0);	//int here => no overflow
 	assert( nd>0 );
 	for(BIT=0; (1<<BIT)<nd; ++BIT);
+	total_bits = N*BIT;
 
 	//optimize
 	memset( DC, 0, sizeof(DC) );
@@ -179,12 +220,14 @@ int main(const int argc, const char *argv[])	{
 
 	//transform input (k = dest bit index)
 	*--source = 0;
-	for(i=0,k=0; i!=N;)	{
-		const byte v = CD[source[++i]];
+	for(i=k=0; i!=N;)	{
+		const byte symbol = source[++i];
+		const byte length = symbol_length(symbol);	// this one or the previous?
+		const byte v = CD[symbol];
 		source[k>>3] |= v<<(k&7);
-		if(k>>3 != (k+BIT)>>3)
+		if(k>>3 != (k+length)>>3)	// next byte
 			source[(k>>3)+1] = v>>( 8-(k&7) );
-		k += BIT;
+		k += length;
 		X[ get_key(k) >> (32-opt.radPow) ] += 1;
 	}
 	printf("Symbols (%d) compressed (%d bits).\n", nd,BIT);
@@ -194,12 +237,12 @@ int main(const int argc, const char *argv[])	{
 		for(i=1<<opt.radPow, k=X[i]=Y[i]=N; i--;)
 			X[i] = (k -= X[i]);
 		memcpy( Y, X, SINT+(SINT<<opt.radPow) );
-		for(i=0; (i+=BIT)<=N*BIT; )	{
-			dword new_key = get_key(i) >> (32-opt.radPow);
+		for(i=k=0; (k+=symbol_length(source[i]),1) && ++i!=N; )	{
+			dword new_key = get_key(k) >> (32-opt.radPow);
 			long diff = (new_key<<1) - prev_key;
 			prev_key += diff;
 			if( useItoh && diff<0 ) ++prev_key;
-			else P[X[new_key]++] = i;
+			else P[X[new_key]++] = k;
 		}
 		printf("Radix (%d bits) completed.\n", opt.radPow);
 	}
@@ -213,12 +256,13 @@ int main(const int argc, const char *argv[])	{
 
 	if(useItoh)	{
 		for(i=N; i--; )	{
-			const int id = P[i]+BIT;
-			assert(id > 0);
-			if(id > N*BIT)	{
+			const int prev = P[i];
+			assert(prev > 0);
+			if(prev == total_bits)	{
 				assert(base_id<0);
 				base_id = i;
 			}else	{
+				const int id = prev + offset_length(prev);
 				const dword key = get_key(id) >> (32-opt.radPow);
 				if(Y[key+1] <= i)	{
 					const int to = --Y[key+1];
@@ -238,7 +282,10 @@ int main(const int argc, const char *argv[])	{
 	//prepare verification
 	memset(R1,0,sizeof(R1));
 	for(i=N; i--;)	{
-		R1[ get_char(P[i]-BIT) ] = i;
+		const int next = P[i],
+			id = next - offset_length(next);
+		//warning: untested!
+		R1[ get_char(id) ] = i;
 	}
 	//write output
 	fx = fopen( opt.nameOut, "wb" );
@@ -246,14 +293,17 @@ int main(const int argc, const char *argv[])	{
 	fwrite(&base_id,4,1,fx);
 
 	for(i=0; i!=N; ++i)	{
-		int v = P[i]; byte ch;
+		const int v = P[i];
+		byte ch;
 		assert(v>0);
-		if(v == N*BIT)	{
+		if(v == total_bits)	{
 			//todo: optimize it?
 			ch = get_char(0);
 		}else	{
+			const int length = offset_length(v);
 			ch = get_char(v);
-			if(P[R1[ch]++] != BIT+v) break;
+			//verification
+			if(P[R1[ch]++] != v+length) break;
 		}
 		fputc( ch, fx );
 	}
