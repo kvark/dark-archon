@@ -4,6 +4,7 @@
  */
 
 #include "common.h"
+#include <assert.h>
 #include <memory.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,7 +12,7 @@
 
 /*	Huffman coding
 	Symbol -> Node
-	Nodes -> List
+	Nodes in a List
 	Node -> Bit,Parent
 	Symbol -> Code
 */
@@ -32,6 +33,7 @@ static void get_code(struct HuffCode *const cod, const struct HuffNode *const no
 	if(nod && nod->parent)	{
 		get_code( cod, nod->parent );
 		cod->code = (cod->code<<1) + nod->value;
+		assert( cod->length < 32 );
 		++cod->length;
 	}
 }
@@ -57,6 +59,7 @@ static void make_codes(const dword *const freq, struct HuffCode *const result)	{
 	int i, n_nodes = 0;
 	NodePtr table[0x100], nodes[0x100];
 	memset( result,0, 0x100 * sizeof(struct HuffCode) );
+	// fill up tree leaves
 	for(i=0; i!=0x100; ++i)	{
 		if(freq[i])	{
 			struct HuffNode *const nod = malloc( sizeof(struct HuffNode) );
@@ -68,6 +71,7 @@ static void make_codes(const dword *const freq, struct HuffCode *const result)	{
 		}else
 			table[i] = NULL;
 	}
+	// construct the rest of the tree
 	for(; n_nodes>1; --n_nodes)	{
 		struct HuffNode *na,*nb,
 			*const nod = malloc( sizeof(struct HuffNode) );
@@ -81,9 +85,11 @@ static void make_codes(const dword *const freq, struct HuffCode *const result)	{
 		na->value = 0;
 		nb->value = 1;
 	}
+	// generate symbol codes
 	for(i=0; i!=0x100; ++i)	{
 		get_code( result+i, table[i] );
 	}
+	// free nodes memory
 	for(i=0; i!=0x100; ++i)	{
 		if(!table[i])	continue;
 		table[i]->weight = 0;
@@ -96,31 +102,38 @@ int main(const int argc, const char *argv[])	{
 	dword freq[0x100] = {0};
 	struct HuffCode codes[0x100];
 	FILE *fi = NULL;
-	int length = 0, sym = 0, total = 0, alpha_size = 0;
+	int length = 0, sym = 0;
 	printf("Alphabet compression tool\n");
 	printf("\tproject Archon (C) Dzmitry Malyshau\n");
 	if(argc != 2) return -1;
 	memset( codes, 0, sizeof(codes) );
 	fi = fopen(argv[1],"rb");
 	if(!fi) return -2;
-	printf("Reading...\n");
-	fseek(fi,0,SEEK_END);
-	length = ftell(fi);
-	fseek(fi,0,SEEK_SET);
-	while( fread(&sym,1,1,fi) )	{
-		++freq[sym];
+	{
+		printf("Reading...\n");
+		fseek(fi,0,SEEK_END);
+		length = ftell(fi);
+		fseek(fi,0,SEEK_SET);
+		while( fread(&sym,1,1,fi) )	{
+			++freq[sym];
+		}
+		fclose(fi);
 	}
-	fclose(fi);
-	printf("Building tree...\n");
-	make_codes(freq,codes);
-	printf("Encoding...\n");
-	for(sym=0; sym!=0x100; ++sym)	{
-		if(!freq[sym]) continue;
-		++alpha_size;
-		total += freq[sym] * codes[sym].length;
+	{
+		printf("Building Huffman tree...\n");
+		make_codes(freq,codes);
 	}
-	printf("\tAlphabet size: %d\n", alpha_size );
-	printf("\tAvg length: %.2f bits\n", total*1.f / length );
+	{
+		int total = 0, alpha_size = 0;
+		printf("Encoding...\n");
+		for(sym=0; sym!=0x100; ++sym)	{
+			if(!freq[sym]) continue;
+			++alpha_size;
+			total += freq[sym] * codes[sym].length;
+		}
+		printf("\tAlphabet size: %d\n", alpha_size );
+		printf("\tAvg length: %.2f bits\n", total*1.f / length );
+	}
 	printf("Done\n");
 	return 0;
 }
