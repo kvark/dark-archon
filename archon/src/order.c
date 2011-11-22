@@ -118,7 +118,7 @@ void optimize_bubble(int nd)	{
 void optimize_greedy(int nd)	{
 	int i,p0=0,p1=nd;
 	int ins[256]={0},ots[256]={0};
-	printf("Greasy!\n");
+	printf("Greedy!\n");
 	//step-1: count inputs and outputs to graph nodes
 	for(i=0; i!=256; ++i)	{
 		int j;
