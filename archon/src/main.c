@@ -14,7 +14,7 @@
 int R1[0x100] = {0}, BIT;
 int R2[0x100][0x100] = {{0}};
 byte CD[0x100],DC[0x100];
-static byte *s,*s0;
+static byte *source,*s0;
 
 extern void optimize_none(int);
 extern void optimize_freq(int);
@@ -25,18 +25,17 @@ extern void optimize_bubble(int);
 
 
 dword get_key_bytes(const int bi)	{
-	return *(dword*)(s-4+(bi>>3));
+	return *(dword*)(source-4+(bi>>3));
 }
 dword get_key_fixed(const int bi)	{
-	const byte *const s2 = s + (bi>>3);
+	const byte *const s2 = source + (bi>>3);
 	const int bit = bi & 7;
 	return (((dword)s2[0]<<24)<<(8-bit)) | (*(dword*)(s2-4)>>bit);
 }
 static dword (*const get_key)(const int) = get_key_fixed;
 
-byte get_char(const int id)	{
-	int v = id*BIT;
-	const word us = *(word*)(s+(v>>3));
+byte get_char(const int v)	{
+	const word us = *(word*)(source+(v>>3));
 	const word d = (us >> (v&7)) & ((1<<BIT)-1);
 	return DC[d];
 }
@@ -45,10 +44,10 @@ byte get_char(const int id)	{
 void sort_bese(int *A, int *B, int depth)	{
 	while(A+1 < B)	{
 		int *x=A,*y=A+1,*z=B;
-		const dword U = get_key(A[0]*BIT - depth);
+		const dword U = get_key(A[0] - depth);
 		while(y != z)	{
 			const int s = *y;
-			const dword V = get_key(s*BIT - depth);
+			const dword V = get_key(s - depth);
 			if(V<U)	{
 				*y++ = *x; *x++ = s;
 			}else if(V>U)	{
@@ -115,8 +114,9 @@ int main(const int argc, const char *argv[])	{
 	FILE *fx = NULL;
 	time_t t0 = 0;
 	const unsigned termin = 10, SINT = sizeof(int), useItoh = 2;
-	int i,N,nd,k,source=-1,sorted=0;
+	int i,N,nd,k,base_id=-1,sorted=0;
 	int *P,*X,*Y; struct Options opt;
+	
 	printf("Var BWT: Radix+BeSe\n");
 	printf("archon <f_in> <f_out> [-o alphabet_order]\n");
 	opt = read_command_line(argc,argv);
@@ -141,8 +141,8 @@ int main(const int argc, const char *argv[])	{
 	assert( termin>1 && N>0 );
 	s0 = (byte*)malloc(N+termin);
 	memset(s0, -1, termin);
-	s = s0 + termin;
-	fread(s,1,N,fx);
+	source = s0 + termin;
+	fread(source,1,N,fx);
 	fclose(fx);
 	P = (int*)malloc( N*SINT );
 	memset( P, -1, N*SINT );
@@ -156,7 +156,7 @@ int main(const int argc, const char *argv[])	{
 	{	//zero & first order statistics
 		byte b = 0xFF, c = 0xFF;
 		for(i=0; i!=N; ++i)	{
-			const byte a = s[i];
+			const byte a = source[i];
 			R1[a] += 1;
 			if(a!=b) { c=b; b=a; }
 			R2[a][c] += 1;
@@ -178,12 +178,12 @@ int main(const int argc, const char *argv[])	{
 		CD[DC[i]] = i;
 
 	//transform input (k = dest bit index)
-	*--s = 0;
+	*--source = 0;
 	for(i=0,k=0; i!=N;)	{
-		byte v = CD[s[++i]];
-		s[k>>3] |= v<<(k&7);
+		const byte v = CD[source[++i]];
+		source[k>>3] |= v<<(k&7);
 		if(k>>3 != (k+BIT)>>3)
-			s[(k>>3)+1] = v>>( 8-(k&7) );
+			source[(k>>3)+1] = v>>( 8-(k&7) );
 		k += BIT;
 		X[ get_key(k) >> (32-opt.radPow) ] += 1;
 	}
@@ -194,8 +194,8 @@ int main(const int argc, const char *argv[])	{
 		for(i=1<<opt.radPow, k=X[i]=Y[i]=N; i--;)
 			X[i] = (k -= X[i]);
 		memcpy( Y, X, SINT+(SINT<<opt.radPow) );
-		for(i=0; ++i<=N; )	{
-			dword new_key = get_key(i*BIT) >> (32-opt.radPow);
+		for(i=0; (i+=BIT)<=N*BIT; )	{
+			dword new_key = get_key(i) >> (32-opt.radPow);
 			long diff = (new_key<<1) - prev_key;
 			prev_key += diff;
 			if( useItoh && diff<0 ) ++prev_key;
@@ -213,13 +213,13 @@ int main(const int argc, const char *argv[])	{
 
 	if(useItoh)	{
 		for(i=N; i--; )	{
-			const int id = P[i]+1;
+			const int id = P[i]+BIT;
 			assert(id > 0);
-			if(id > N)	{
-				assert(source<0);
-				source = i;
+			if(id > N*BIT)	{
+				assert(base_id<0);
+				base_id = i;
 			}else	{
-				const dword key = get_key(id*BIT) >> (32-opt.radPow);
+				const dword key = get_key(id) >> (32-opt.radPow);
 				if(Y[key+1] <= i)	{
 					const int to = --Y[key+1];
 					assert(X[key] <= to);
@@ -238,22 +238,22 @@ int main(const int argc, const char *argv[])	{
 	//prepare verification
 	memset(R1,0,sizeof(R1));
 	for(i=N; i--;)	{
-		R1[ get_char(P[i]-1) ] = i;
+		R1[ get_char(P[i]-BIT) ] = i;
 	}
 	//write output
 	fx = fopen( opt.nameOut, "wb" );
-	assert(source >= 0);
-	fwrite(&source,4,1,fx);
+	assert(base_id >= 0);
+	fwrite(&base_id,4,1,fx);
 
 	for(i=0; i!=N; ++i)	{
 		int v = P[i]; byte ch;
 		assert(v>0);
-		if(v == N)	{
+		if(v == N*BIT)	{
 			//todo: optimize it?
 			ch = get_char(0);
 		}else	{
 			ch = get_char(v);
-			if(P[R1[ch]++] != 1+v) break;
+			if(P[R1[ch]++] != BIT+v) break;
 		}
 		fputc( ch, fx );
 	}
