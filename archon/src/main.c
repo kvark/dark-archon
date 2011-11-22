@@ -13,7 +13,8 @@
 
 int R1[0x100] = {0}, BIT;
 int R2[0x100][0x100] = {{0}};
-byte CD[0x100],DC[0x100],*s,*s0;
+byte CD[0x100],DC[0x100];
+static byte *s,*s0;
 
 extern void optimize_none(int);
 extern void optimize_freq(int);
@@ -23,11 +24,16 @@ extern void optimize_topo(int);
 extern void optimize_bubble(int);
 
 
-dword get_key(const int bi)	{
+dword get_key_bytes(const int bi)	{
+	return *(dword*)(s-4+(bi>>3));
+}
+dword get_key_fixed(const int bi)	{
 	const byte *const s2 = s + (bi>>3);
 	const int bit = bi & 7;
 	return (((dword)s2[0]<<24)<<(8-bit)) | (*(dword*)(s2-4)>>bit);
 }
+static dword (*const get_key)(const int) = get_key_fixed;
+
 byte get_char(const int id)	{
 	int v = id*BIT;
 	const word us = *(word*)(s+(v>>3));
