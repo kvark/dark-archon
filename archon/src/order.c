@@ -1,5 +1,6 @@
 /*	order.c
- *	Implementations for alphabet reordering routines
+ *	Implementations for alphabet reordering routines.
+ *	project Archon (C) Dzmitry Malyshau, 2011
  */
 
 #include <assert.h>
