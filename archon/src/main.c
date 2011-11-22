@@ -1,8 +1,10 @@
 /*	main.c
- *	Archon entry point
+ *	Archon entry point.
+*	project Archon (C) Dzmitry Malyshau, 2011
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include <memory.h>
@@ -11,7 +13,7 @@
 
 int R1[0x100] = {0}, BIT;
 int R2[0x100][0x100] = {{0}};
-byte CD[0x100],DC[0x100],*s;
+byte CD[0x100],DC[0x100],*s,*s0;
 
 extern void optimize_none(int);
 extern void optimize_freq(int);
@@ -131,8 +133,9 @@ int main(const int argc, const char *argv[])	{
 	N = ftell(fx);
 	fseek(fx,0,SEEK_SET);
 	assert( termin>1 && N>0 );
-	s = (byte*)malloc(N+termin) + termin;
-	memset(s-termin, -1, termin);
+	s0 = (byte*)malloc(N+termin);
+	memset(s0, -1, termin);
+	s = s0 + termin;
 	fread(s,1,N,fx);
 	fclose(fx);
 	P = (int*)malloc( N*SINT );
@@ -252,7 +255,7 @@ int main(const int argc, const char *argv[])	{
 	fclose(fx);
 
 	//finish it
-	free(s+1-termin);
+	free(s0);
 	free(P);
 	free(X); free(Y);
 	printf("Done\n");

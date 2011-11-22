@@ -1,5 +1,6 @@
 /*	test.c
- *	Separate alphabet re-ordering benchmark utility
+ *	Separate alphabet re-ordering benchmark utility.
+ *	project Archon (C) Dzmitry Malyshau, 2011
  */ 
 
 #include "common.h"
