@@ -40,17 +40,18 @@ struct CodeMan	{
 }static coder = { DECODE_BITS };
 
 
-static int encode_stream(byte *const output, const byte *const input, const int num)	{
+static int encode_stream(dword *const output, const byte *const input, const int num)	{
 	int i,k;
-	for(i=k=0; i!=num; ++i)	{
+	//transform input (k = dest bit index)
+	for(output[i=k=0]=0; i!=num; ++i)	{
 		const byte symbol = input[i];
-		const struct SymbolCode *const sc = coder.encode + symbol;
-		const byte v = (byte)sc->code;
+		struct SymbolCode const* const sc = coder.encode + symbol;
 		const int k2 = k + sc->length;
-		assert(k<k2 && k+8>=k2);
-		output[k>>3] |= v<<(k&7);
-		if(k>>3 != k2>>3)	// next byte
-			output[(k>>3)+1] = v>>( 8-(k&7) );
+		assert( !(sc->code >> sc->length) );
+		assert( k<k2 && k+32>=k2 );
+		output[k>>5] |= sc->code<<(k & 0x1F);
+		if((k>>5) != (k2>>5))	// next dword
+			output[k2>>5] = sc->code>>( 0x20-(k&0x1F) );
 		k = k2;
 	}
 	return k;
@@ -233,8 +234,7 @@ struct Options read_command_line(const int ac, const char *av[])	{
 
 
 int main(const int argc, const char *argv[])	{
-	FILE *fx = NULL;
-	time_t t0 = 0;
+	time_t t0 = 0; FILE *fx = NULL;
 	const unsigned SINT = sizeof(int), useItoh = 1;
 	int i,N,nd,k,base_id=-1,sorted=0,total_bits = 0;
 	int *P,*X,*Y; struct Options opt;
@@ -255,24 +255,20 @@ int main(const int argc, const char *argv[])	{
 		return -2;
 	}
 
-	fx = fopen( opt.nameIn, "rb" );
 	//read input & allocate memory
+	fx = fopen( opt.nameIn, "rb" );
 	fseek(fx,0,SEEK_END);
 	N = ftell(fx);
 	fseek(fx,0,SEEK_SET);
-	assert( termin>1 && N>0 );
-	// todo: allocate one large memory block
-	s_base = (byte*)malloc(N+termin);
-	memset(s_base, -1, termin);
-	source = s_base + termin;
-	fread(source,1,N,fx);
-	fclose(fx);
 	P = (int*)malloc( N*SINT );
-	memset( P, -1, N*SINT );
+	assert( termin>1 && N>0 );
+	source = (byte*)P;
+	fread(source,1,N,fx);
+	fclose(fx); fx = NULL;
+	// todo: allocate one large memory block
 	X = (int*)malloc( SINT+(SINT<<opt.radPow) );
 	Y = (int*)malloc( SINT+(SINT<<opt.radPow) );
 	memset( X, 0, SINT<<opt.radPow );
-	i = sizeof(coder);
 	printf("Loaded: %d kb; Allocated %d kb\n", N>>10,
 		(N*(2+SINT) + (SINT<<16) + 2*(SINT<<opt.radPow) + SINT+termin + sizeof(coder))
 		>>10 );
@@ -303,17 +299,22 @@ int main(const int argc, const char *argv[])	{
 	
 	// fill in the encoding table
 	memset(coder.encode, 0, sizeof(coder.encode) );
-	for(i=0; i!=0x100; ++i)	{
+	for(i=total_bits=0; i!=0x100; ++i)	{
 		struct SymbolCode *const ps = coder.encode + i;
 		ps->length = R1[i] ? BIT : 0;
+		//if(!i) ps->length += 1;
 		ps->code = CD[i];
+		total_bits += R1[i] * ps->length;
 	}
+	
 	build_decoder();
-	//coder.encode[0].length += 1;	//test!
+	s_base = (byte*)malloc(termin + (total_bits>>3) + 4);
+	memset(s_base, -1, termin);
+	source = s_base + termin;
 
-	//transform input (k = dest bit index)
-	*--source = 0;
-	total_bits = encode_stream(source,source+1,N);
+	i = encode_stream( (dword*)source, (byte*)P, N );
+	assert( i == total_bits );
+	
 	for(k=0; k<total_bits; )	{
 		k += offset_length(k);
 		X[ get_key(k) >> (32-opt.radPow) ] += 1;
@@ -321,6 +322,8 @@ int main(const int argc, const char *argv[])	{
 	assert(k == total_bits);
 	printf("Symbols (%d) compressed into %.2f bits/sym.\n",
 		nd, total_bits*1.f / N );
+
+	memset( P, -1, N*SINT );
 
 	{	//radix sort
 		dword prev_key = (dword)-1;
@@ -377,8 +380,8 @@ int main(const int argc, const char *argv[])	{
 	memset(R1,0,sizeof(R1));
 	for(i=N; i--;)	{
 		const int next = P[i],
-			id = next - offset_length(next);
-		//warning: untested!
+			id = next - BIT;
+		//todo: scan backwards
 		R1[ get_char(id) ] = i;
 	}
 	//write output
@@ -402,7 +405,7 @@ int main(const int argc, const char *argv[])	{
 		fputc( ch, fx );
 	}
 	printf("Verification: %s\n", (i==N?"OK":"Failed") );
-	fclose(fx);
+	fclose(fx); fx = NULL;
 
 	//finish it
 	free(s_base);
