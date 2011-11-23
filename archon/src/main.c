@@ -42,7 +42,7 @@ struct CodeMan	{
 
 static int encode_stream(dword *const output, const byte *const input, const int num)	{
 	int i,k;
-	//transform input (k = dest bit index)
+	// transform input (k = dest bit index)
 	for(output[i=k=0]=0; i!=num; ++i)	{
 		const byte symbol = input[i];
 		struct SymbolCode const* const sc = coder.encode + symbol;
@@ -255,7 +255,7 @@ int main(const int argc, const char *argv[])	{
 		return -2;
 	}
 
-	//read input & allocate memory
+	// read input & allocate memory
 	fx = fopen( opt.nameIn, "rb" );
 	fseek(fx,0,SEEK_END);
 	N = ftell(fx);
@@ -269,12 +269,12 @@ int main(const int argc, const char *argv[])	{
 	X = (int*)malloc( SINT+(SINT<<opt.radPow) );
 	Y = (int*)malloc( SINT+(SINT<<opt.radPow) );
 	memset( X, 0, SINT<<opt.radPow );
-	printf("Loaded: %d kb; Allocated %d kb\n", N>>10,
-		(N*(2+SINT) + (SINT<<16) + 2*(SINT<<opt.radPow) + SINT+termin + sizeof(coder))
-		>>10 );
+	k = 2*sizeof(CD)+sizeof(R1)+sizeof(R2)+sizeof(coder) +	//static
+		N*SINT + 2*(SINT<<opt.radPow);						//dynamic
+	printf("Loaded: %d kb; Allocated %d kb\n", N>>10, k>>10 );
 
 	t0 = clock();
-	{	//zero & first order statistics
+	{	// zero & first order statistics
 		byte b = 0xFF, c = 0xFF;
 		for(i=0; i!=N; ++i)	{
 			const byte a = source[i];
@@ -289,7 +289,7 @@ int main(const int argc, const char *argv[])	{
 	assert( nd>0 );
 	for(BIT=0; (1<<BIT)<nd; ++BIT);
 
-	//optimize
+	// optimize
 	memset( DC, 0, sizeof(DC) );
 	for(i=0; i!=0x100; ++i)
 		DC[CD[i]] = i;
@@ -302,7 +302,7 @@ int main(const int argc, const char *argv[])	{
 	for(i=total_bits=0; i!=0x100; ++i)	{
 		struct SymbolCode *const ps = coder.encode + i;
 		ps->length = R1[i] ? BIT : 0;
-		//if(!i) ps->length += 1;
+		//if(!i) ps->length = 30;
 		ps->code = CD[i];
 		total_bits += R1[i] * ps->length;
 	}
@@ -312,20 +312,20 @@ int main(const int argc, const char *argv[])	{
 	memset(s_base, -1, termin);
 	source = s_base + termin;
 
-	i = encode_stream( (dword*)source, (byte*)P, N );
-	assert( i == total_bits );
+	k = encode_stream( (dword*)source, (byte*)P, N );
+	assert( k == total_bits );
 	
 	for(k=0; k<total_bits; )	{
 		k += offset_length(k);
 		X[ get_key(k) >> (32-opt.radPow) ] += 1;
 	}
 	assert(k == total_bits);
-	printf("Symbols (%d) compressed into %.2f bits/sym.\n",
-		nd, total_bits*1.f / N );
+	printf("Symbols (%d) compressed into %.2f bits/sym, using %d Kb of memory.\n",
+		nd, total_bits*1.f / N, (termin + (total_bits>>3) + 4)>>10 );
 
 	memset( P, -1, N*SINT );
 
-	{	//radix sort
+	{	// radix sort
 		dword prev_key = (dword)-1;
 		for(i=1<<opt.radPow, k=X[i]=Y[i]=N; i--;)
 			X[i] = (k -= X[i]);
@@ -376,7 +376,8 @@ int main(const int argc, const char *argv[])	{
 		for(i=0; i!=256; ++i)
 			DC[CD[i]] = i;
 	}
-	//prepare verification, not performance-critical
+	// prepare verification, not performance-critical
+	// for each symbol find the lowest string starting with it
 	memset(R1,0,sizeof(R1));
 	for(i=N; i--;)	{
 		const int next = P[i],
@@ -384,7 +385,7 @@ int main(const int argc, const char *argv[])	{
 		//todo: scan backwards
 		R1[ get_char(id) ] = i;
 	}
-	//write output
+	// write output
 	fx = fopen( opt.nameOut, "wb" );
 	assert(base_id >= 0);
 	fwrite(&base_id,4,1,fx);
@@ -399,7 +400,7 @@ int main(const int argc, const char *argv[])	{
 		}else	{
 			const int length = offset_length(v);
 			ch = get_char(v);
-			//verification
+			// verification
 			if(P[R1[ch]++] != v+length) break;
 		}
 		fputc( ch, fx );
@@ -407,7 +408,7 @@ int main(const int argc, const char *argv[])	{
 	printf("Verification: %s\n", (i==N?"OK":"Failed") );
 	fclose(fx); fx = NULL;
 
-	//finish it
+	// finish like a man
 	free(s_base);
 	free(P);
 	free(X); free(Y);
