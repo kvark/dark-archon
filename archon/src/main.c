@@ -14,7 +14,8 @@
 int R1[0x100] = {0}, BIT;
 int R2[0x100][0x100] = {{0}};
 byte CD[0x100],DC[0x100];
-static byte *source,*s0;
+static byte *source,*s_base;
+static const unsigned termin = 10;
 
 extern void optimize_none(int);
 extern void optimize_freq(int);
@@ -23,10 +24,82 @@ extern void optimize_matrix(int);
 extern void optimize_topo(int);
 extern void optimize_bubble(int);
 
+//	Alphabet encoding
+
 struct SymbolCode	{
 	dword	code;
 	byte	length;
 };
+
+struct CodeMan	{
+#define DECODE_BITS	12
+	const	byte	DEBITS;
+	word	dec_offset[1+(1<<DECODE_BITS)];
+	byte	dec_list[0x100 + (1<<DECODE_BITS)];
+	struct SymbolCode	encode[0x100];
+}static coder = { DECODE_BITS };
+
+
+static int encode_stream(byte *const output, const byte *const input, const int num)	{
+	int i,k;
+	for(i=k=0; i!=num; ++i)	{
+		const byte symbol = input[i];
+		const struct SymbolCode *const sc = coder.encode + symbol;
+		const byte v = (byte)sc->code;
+		const int k2 = k + sc->length;
+		assert(k<k2 && k+8>=k2);
+		output[k>>3] |= v<<(k&7);
+		if(k>>3 != k2>>3)	// next byte
+			output[(k>>3)+1] = v>>( 8-(k&7) );
+		k = k2;
+	}
+	return k;
+};
+
+static void build_decoder()	{
+	const dword mask = (1<<coder.DEBITS)-1;
+	int i, total = 0;
+	// collect bin frequencies
+	memset( coder.dec_offset, 0, sizeof(coder.dec_offset) );
+	for(i=0; i!=0x100; ++i)	{
+		struct SymbolCode *const ps = coder.encode + i;
+		word *const pd = coder.dec_offset + 1 + (ps->code & mask);
+		if(ps->length < coder.DEBITS)	{
+			int j = 1<<coder.DEBITS;
+			if(!ps->length) continue;
+			while(j>0)	{
+				word *const px = pd + (j-=(1<<ps->length));
+				assert(!*px);
+				*px = 1; ++total;
+			}
+			assert(!j);
+		}else	{
+			++*pd; ++total;
+		}
+	}
+	assert(total < sizeof(coder.dec_list));
+	// turn into bin offsets
+	for(i=mask+1; i; --i)	{
+		coder.dec_offset[i] = (total -= coder.dec_offset[i]);
+	}
+	assert(!total);
+	// collect bins
+	for(i=0; i!=0x100; ++i)	{
+		struct SymbolCode *const ps = coder.encode + i;
+		word *const pd = coder.dec_offset + 1 + (ps->code & mask);
+		if(ps->length < coder.DEBITS)	{
+			int j = 1<<coder.DEBITS;
+			if(!ps->length) continue;
+			while(j>0)	{
+				word *const px = pd + (j-=(1<<ps->length));
+				coder.dec_list[(*px)++] = i;
+			}
+		}else	{
+			coder.dec_list[(*pd)++] = i;
+		}
+	}
+};
+
 
 //	Key access method	//
 
@@ -36,24 +109,35 @@ static dword get_key_bytes(const int bi)	{
 static dword get_key_fixed(const int bi)	{
 	const byte *const s2 = source + (bi>>3);
 	const int bit = bi & 7;
+	assert(s2-4 >= s_base);
 	return (((dword)s2[0]<<24)<<(8-bit)) | (*(dword*)(s2-4)>>bit);
 }
 static dword (*const get_key)(const int) = get_key_fixed;
 
-//	Symbol length method	//
-
-static int symbol_length_fixed(const byte sym)	{
-	return BIT;
-}
-static int (*const symbol_length)(const byte) = symbol_length_fixed;
-
 //	Symbol decode method	//
 
-static struct SymbolCode symbol_decode_fixed(const dword data)	{
-	const struct SymbolCode sc = { data&((1<<BIT)-1), BIT };
+static struct SymbolCode const* symbol_decode_fixed(const dword data)	{
+	static struct SymbolCode sc;
+	sc.code = data & ((1<<BIT)-1);
+	sc.length = BIT;
+	return &sc;
+}
+static struct SymbolCode const* symbol_decode_uni(const dword data)	{
+	const dword cod = data & ((1<<coder.DEBITS)-1);
+	word *const ps = coder.dec_offset + cod;
+	const word limit = ps[1];
+	struct SymbolCode const* sc = NULL;
+	word i;
+	assert(ps[0] < limit);
+	for(i=ps[0]; ; ++i)	{
+		sc = coder.encode + coder.dec_list[i];
+		if(++i==limit) break;
+		if((cod & ((1<<sc->length)-1)) == sc->code)
+			break;
+	}
 	return sc;
 }
-static struct SymbolCode (*const symbol_decode)(const dword) = symbol_decode_fixed;
+static struct SymbolCode const* (*const symbol_decode)(const dword) = symbol_decode_fixed;
 
 //	Symbol length on the offset method	//
 
@@ -61,20 +145,18 @@ static byte offset_length_fixed(const int offset)	{
 	return BIT;
 }
 static byte offset_length_uni(const int offset)	{
-	//warning: this needs debugging
-	const dword key = get_key(offset);
-	const struct SymbolCode sc = symbol_decode_fixed(key);
-	return sc.length;
+	const dword key = get_key(offset+32);
+	return symbol_decode_uni(key)->length;
 }
-static byte (*const offset_length)(const int) = offset_length_fixed;
+static byte (*const offset_length)(const int) = offset_length_uni;
 
 
 //	Sorting		//
 
 static byte get_char(const int v)	{
 	const dword us = *(word*)(source+(v>>3)) >> (v&7);
-	const struct SymbolCode code = symbol_decode(us);
-	return DC[ code.code ];
+	struct SymbolCode const* sc = symbol_decode(us);
+	return DC[ sc->code ];
 }
 
 
@@ -153,7 +235,7 @@ struct Options read_command_line(const int ac, const char *av[])	{
 int main(const int argc, const char *argv[])	{
 	FILE *fx = NULL;
 	time_t t0 = 0;
-	const unsigned termin = 10, SINT = sizeof(int), useItoh = 2;
+	const unsigned SINT = sizeof(int), useItoh = 1;
 	int i,N,nd,k,base_id=-1,sorted=0,total_bits = 0;
 	int *P,*X,*Y; struct Options opt;
 	
@@ -179,9 +261,10 @@ int main(const int argc, const char *argv[])	{
 	N = ftell(fx);
 	fseek(fx,0,SEEK_SET);
 	assert( termin>1 && N>0 );
-	s0 = (byte*)malloc(N+termin);
-	memset(s0, -1, termin);
-	source = s0 + termin;
+	// todo: allocate one large memory block
+	s_base = (byte*)malloc(N+termin);
+	memset(s_base, -1, termin);
+	source = s_base + termin;
 	fread(source,1,N,fx);
 	fclose(fx);
 	P = (int*)malloc( N*SINT );
@@ -189,8 +272,10 @@ int main(const int argc, const char *argv[])	{
 	X = (int*)malloc( SINT+(SINT<<opt.radPow) );
 	Y = (int*)malloc( SINT+(SINT<<opt.radPow) );
 	memset( X, 0, SINT<<opt.radPow );
+	i = sizeof(coder);
 	printf("Loaded: %d kb; Allocated %d kb\n", N>>10,
-		(N*(2+SINT) + (SINT<<16) + 2*(SINT<<opt.radPow) + SINT+termin)>>10 );
+		(N*(2+SINT) + (SINT<<16) + 2*(SINT<<opt.radPow) + SINT+termin + sizeof(coder))
+		>>10 );
 
 	t0 = clock();
 	{	//zero & first order statistics
@@ -207,42 +292,50 @@ int main(const int argc, const char *argv[])	{
 	nd = CD[0xFF] + (R1[0xFF] ? 1:0);	//int here => no overflow
 	assert( nd>0 );
 	for(BIT=0; (1<<BIT)<nd; ++BIT);
-	total_bits = N*BIT;
 
 	//optimize
 	memset( DC, 0, sizeof(DC) );
 	for(i=0; i!=0x100; ++i)
 		DC[CD[i]] = i;
-	if(useItoh == 2)
-		opt.fOrder(nd);
-	for(i=0; i!=0x100; ++i)
-		CD[DC[i]] = i;
+	//opt.fOrder(nd);
+	//for(i=0; i!=0x100; ++i)
+	//	CD[DC[i]] = i;
+	
+	// fill in the encoding table
+	memset(coder.encode, 0, sizeof(coder.encode) );
+	for(i=0; i!=0x100; ++i)	{
+		struct SymbolCode *const ps = coder.encode + i;
+		ps->length = R1[i] ? BIT : 0;
+		ps->code = CD[i];
+	}
+	build_decoder();
+	//coder.encode[0].length += 1;	//test!
 
 	//transform input (k = dest bit index)
 	*--source = 0;
-	for(i=k=0; i!=N;)	{
-		const byte symbol = source[++i];
-		const byte length = symbol_length(symbol);	// this one or the previous?
-		const byte v = CD[symbol];
-		source[k>>3] |= v<<(k&7);
-		if(k>>3 != (k+length)>>3)	// next byte
-			source[(k>>3)+1] = v>>( 8-(k&7) );
-		k += length;
+	total_bits = encode_stream(source,source+1,N);
+	for(k=0; k<total_bits; )	{
+		k += offset_length(k);
 		X[ get_key(k) >> (32-opt.radPow) ] += 1;
 	}
-	printf("Symbols (%d) compressed (%d bits).\n", nd,BIT);
+	assert(k == total_bits);
+	printf("Symbols (%d) compressed into %.2f bits/sym.\n",
+		nd, total_bits*1.f / N );
 
 	{	//radix sort
 		dword prev_key = (dword)-1;
 		for(i=1<<opt.radPow, k=X[i]=Y[i]=N; i--;)
 			X[i] = (k -= X[i]);
 		memcpy( Y, X, SINT+(SINT<<opt.radPow) );
-		for(i=k=0; (k+=symbol_length(source[i]),1) && ++i!=N; )	{
-			dword new_key = get_key(k) >> (32-opt.radPow);
-			long diff = (new_key<<1) - prev_key;
-			prev_key += diff;
-			if( useItoh && diff<0 ) ++prev_key;
-			else P[X[new_key]++] = k;
+		for(i=k=0; ++i!=N; )	{
+			k += offset_length(k);
+			{
+				dword new_key = get_key(k) >> (32-opt.radPow);
+				long diff = (new_key<<1) - prev_key;
+				prev_key += diff;
+				if( useItoh && diff<0 ) ++prev_key;
+				else P[X[new_key]++] = k;
+			}
 		}
 		printf("Radix (%d bits) completed.\n", opt.radPow);
 	}
@@ -264,8 +357,9 @@ int main(const int argc, const char *argv[])	{
 			}else	{
 				const int id = prev + offset_length(prev);
 				const dword key = get_key(id) >> (32-opt.radPow);
-				if(Y[key+1] <= i)	{
-					const int to = --Y[key+1];
+				int *const py = Y+key+1;
+				if(*py <= i)	{
+					const int to = --*py;
 					assert(X[key] <= to);
 					assert(P[to] == -1);
 					P[to] = id;
@@ -275,11 +369,11 @@ int main(const int argc, const char *argv[])	{
 		printf("IT-1 completed: %.2f bad elements\n", sorted*1.f/N);
 	}
 
-	if(useItoh != 2)	{
+	if(opt.fOrder)	{
 		for(i=0; i!=256; ++i)
 			DC[CD[i]] = i;
 	}
-	//prepare verification
+	//prepare verification, not performance-critical
 	memset(R1,0,sizeof(R1));
 	for(i=N; i--;)	{
 		const int next = P[i],
@@ -311,7 +405,7 @@ int main(const int argc, const char *argv[])	{
 	fclose(fx);
 
 	//finish it
-	free(s0);
+	free(s_base);
 	free(P);
 	free(X); free(Y);
 	printf("Done\n");
