@@ -11,6 +11,27 @@
 #include <time.h>
 #include "common.h"
 
+
+//	Ordering methods
+extern void optimize_none(int);
+extern void optimize_freq(int);
+extern void optimize_greedy(int);
+extern void optimize_matrix(int);
+extern void optimize_topo(int);
+extern void optimize_bubble(int);
+
+//	Coder methods
+extern SymbolCodePtr	coder_base();
+extern unsigned			coder_memory();
+extern dword			coder_build_encoder(int const *const, byte const *const, const byte);
+extern int				coder_encode_stream(dword *const, const byte *const, const int);
+extern void				coder_build_decoder();
+extern SymbolCodePtr	coder_decode_symbol(const dword);
+extern dword			coder_extract_code(byte const* const ptr, const int offset);
+
+
+//	Internal structures
+
 enum	Verification	{
 	VER_NONE,
 	VER_IT,
@@ -18,10 +39,7 @@ enum	Verification	{
 }static const VERIFY = VER_SORT;
 
 enum	Constants	{
-	RANDOM_LENGHT_TEST	= 0,
-	MAX_CODE_LENGTH		= 32,
 	COMPARE_BITS		= 32,
-	DECODE_BITS			= 12,
 };
 
 
@@ -30,114 +48,6 @@ int R2[0x100][0x100] = {{0}};
 byte CD[0x100],DC[0x100];
 static byte *source,*s_base;
 static const unsigned termin = 10;
-
-extern void optimize_none(int);
-extern void optimize_freq(int);
-extern void optimize_greedy(int);
-extern void optimize_matrix(int);
-extern void optimize_topo(int);
-extern void optimize_bubble(int);
-
-//	Alphabet encoding
-
-struct SymbolCode	{
-	// maximum Huffman code for the 32bit input has almost 48 bit length
-	// therefore, we need to restrict the code length to 32 upon encoding
-	// ... ore use 64 bit code!
-	dword	code;
-	byte	length;
-};
-
-struct CodeMan	{
-	word	dec_offset[1+(1<<DECODE_BITS)];
-	byte	dec_list[0x100 + (1<<DECODE_BITS)];
-	struct SymbolCode	encode[0x100];
-}static coder;
-
-
-static dword build_encoder()	{
-	// fill in the encoding table
-	int i,k;
-	memset(coder.encode, 0, sizeof(coder.encode) );
-	assert(0<MAX_CODE_LENGTH && MAX_CODE_LENGTH<=32);
-	srand(RANDOM_LENGHT_TEST);
-	for(i=k=0; i!=0x100; ++i)	{
-		struct SymbolCode *const ps = coder.encode + i;
-		ps->length = R1[i] ? BIT : 0;
-		ps->code = CD[i];
-		if(RANDOM_LENGHT_TEST && R1[i])	{
-			const int shift = RANDOM_LENGHT_TEST - ps->length;
-			assert(shift>=0);
-			ps->code <<= shift;
-			ps->length += shift;
-		}
-		k += R1[i] * ps->length;
-	}
-	return k;
-}
-
-
-static int encode_stream(dword *const output, const byte *const input, const int num)	{
-	int i,k;
-	// transform input (k = dest bit index)
-	for(output[i=k=0]=0; i!=num; ++i)	{
-		const byte symbol = input[i];
-		struct SymbolCode const* const sc = coder.encode + symbol;
-		const int k2 = k + sc->length;
-		assert( !(sc->code >> sc->length) );
-		assert( k<k2 && sc->length<=MAX_CODE_LENGTH );
-		output[k>>5] |= sc->code << (k & 0x1F);
-		if((k>>5) != (k2>>5))	// next dword
-			output[k2>>5] = sc->code >> ( 0x20-(k&0x1F) );
-		k = k2;
-	}
-	return k;
-};
-
-static void build_decoder()	{
-	const dword mask = (1<<DECODE_BITS)-1;
-	int i, total = 0;
-	// collect bin frequencies
-	memset( coder.dec_offset, 0, sizeof(coder.dec_offset) );
-	for(i=0; i!=0x100; ++i)	{
-		struct SymbolCode *const ps = coder.encode + i;
-		word *const pd = coder.dec_offset + 1 + (ps->code & mask);
-		if(ps->length < DECODE_BITS)	{
-			int j = 1<<DECODE_BITS;
-			if(!ps->length) continue;
-			while(j>0)	{
-				word *const px = pd + (j-=(1<<ps->length));
-				assert(!*px && "Inconsistent codes");
-				*px = 1; ++total;
-			}
-			assert(!j);
-		}else	{
-			++*pd; ++total;
-		}
-	}
-	assert(total < sizeof(coder.dec_list));
-	// turn into bin offsets
-	for(i=mask+1; i; --i)	{
-		coder.dec_offset[i] = (total -= coder.dec_offset[i]);
-	}
-	assert(!total);
-	// collect bins
-	for(i=0; i!=0x100; ++i)	{
-		struct SymbolCode *const ps = coder.encode + i;
-		word *const pd = coder.dec_offset + 1 + (ps->code & mask);
-		if(ps->length < DECODE_BITS)	{
-			int j = 1<<DECODE_BITS;
-			if(!ps->length) continue;
-			while(j>0)	{
-				word *const px = pd + (j-=(1<<ps->length));
-				coder.dec_list[(*px)++] = i;
-			}
-		}else	{
-			coder.dec_list[(*pd)++] = i;
-		}
-	}
-};
-
 
 
 //	Key access method	//
@@ -155,40 +65,15 @@ static dword (*const get_key)(const int) = get_key_fixed;
 
 //	Symbol decode method	//
 
-static struct SymbolCode const* symbol_decode_fixed(const dword data)	{
+static SymbolCodePtr symbol_decode_fixed(const dword data)	{
 	static struct SymbolCode sc;
 	sc.code = data & ((1<<BIT)-1);
 	sc.length = BIT;
 	return &sc;
 }
-static struct SymbolCode const* symbol_decode_uni(const dword data)	{
-	dword cod = data & ((1<<DECODE_BITS)-1);
-	word *const ps = coder.dec_offset + cod;
-	const word limit = ps[1];
-	struct SymbolCode const* sc = NULL;
-	word i;
-	assert(ps[0] < limit);
-	for(i=ps[0]; ; ++i)	{
-		assert(i < limit);	// can be optimized a bit
-		sc = coder.encode + coder.dec_list[i];
-		cod = data & ((1<<sc->length)-1);
-		if(cod == sc->code)	break;
-	}
-	return sc;
-}
-static struct SymbolCode const* (*const symbol_decode)(const dword) = symbol_decode_uni;
 
-//	Extract previous symbol code by offset	//
+static SymbolCodePtr (*const symbol_decode)(const dword) = coder_decode_symbol;
 
-static dword get_code(const int offset)	{
-	dword code = *(dword*)(source+(offset>>3)) >> (offset&7);
-	if (MAX_CODE_LENGTH>24)	{
-		const byte log = 32 - (offset&7);
-		const dword us = source[4+(offset>>3)] << 24;
-		code |= us << (8-(offset&7));
-	}
-	return code;
-}
 
 //	Symbol length on the offset method	//
 
@@ -196,8 +81,8 @@ static byte offset_length_fixed(const int offset)	{
 	return BIT;
 }
 static byte offset_length_uni(const int offset)	{
-	const dword code = get_code(offset);
-	return symbol_decode_uni(code)->length;
+	const dword code = coder_extract_code(source,offset);
+	return coder_decode_symbol(code)->length;
 }
 static byte (*const offset_length)(const int) = offset_length_uni;
 
@@ -217,8 +102,8 @@ static dword advance_radix(int *const offset, const byte bits)	{
 //	Sorting		//
 
 static byte get_char(const int offset)	{
-	const dword us = get_code(offset);
-	return symbol_decode(us) - coder.encode;
+	const dword us = coder_extract_code(source,offset);
+	return coder_decode_symbol(us) - coder_base();
 }
 
 
@@ -247,7 +132,7 @@ static void sort_bese(int *A, int *B, int depth)	{
 void prepare_verification(int const *const R, const byte power, int const *const P)	{
 	int i;
 	for(i=0; i!=0x100; ++i)	{
-		struct SymbolCode const* const sc = coder.encode + i;
+		struct SymbolCode const* const sc = coder_base() + i;
 		int k;
 		if(!sc->length)	k = -1;				// skip it
 		else if(sc->length <= power)	{ // good
@@ -295,7 +180,7 @@ struct FunParam	{
 };
 
 struct Options read_command_line(const int ac, const char *av[])	{
-	struct Options o = { NULL, NULL, NULL, 20 };
+	struct Options o = { NULL, NULL, NULL, 10 };
 	int i,j;
 	for(i=1; i!=ac; ++i)	{
 		const char *par = av[i];
@@ -324,6 +209,7 @@ struct Options read_command_line(const int ac, const char *av[])	{
 }
 
 
+//	Main entry point	//
 
 int main(const int argc, const char *argv[])	{
 	time_t t0 = 0; FILE *fx = NULL;
@@ -360,7 +246,7 @@ int main(const int argc, const char *argv[])	{
 	X = (int*)malloc( SINT+(SINT<<opt.radPow) );
 	Y = (int*)malloc( SINT+(SINT<<opt.radPow) );
 	memset( X, 0, SINT<<opt.radPow );
-	k = 2*sizeof(CD)+sizeof(R1)+sizeof(R2)+sizeof(coder) +	//static
+	k = 2*sizeof(CD)+sizeof(R1)+sizeof(R2)+coder_memory() +	//static
 		N*SINT + 2*(SINT<<opt.radPow);						//dynamic
 	printf("Loaded: %d kb; Allocated %d kb\n", N>>10, k>>10 );
 
@@ -390,13 +276,13 @@ int main(const int argc, const char *argv[])	{
 			CD[DC[i]] = i;
 	}
 	
-	total_bits = build_encoder();
-	build_decoder();
+	total_bits = coder_build_encoder(R1,CD,BIT);
+	coder_build_decoder();
 	s_base = (byte*)malloc(termin + (total_bits>>3) + 4);
 	memset(s_base, -1, termin);
 	source = s_base + termin;
 
-	k = encode_stream( (dword*)source, (byte*)P, N );
+	k = coder_encode_stream( (dword*)source, (byte*)P, N );
 	assert( k == total_bits );
 	
 	for(k=0; k<total_bits; )	{
