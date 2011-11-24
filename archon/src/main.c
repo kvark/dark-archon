@@ -11,6 +11,12 @@
 #include <time.h>
 #include "common.h"
 
+enum	Verification	{
+	VER_NONE,
+	VER_IT,
+	VER_SORT
+}static const VERIFY = VER_SORT;
+
 int R1[0x100] = {0}, BIT;
 int R2[0x100][0x100] = {{0}};
 byte CD[0x100],DC[0x100];
@@ -27,6 +33,9 @@ extern void optimize_bubble(int);
 //	Alphabet encoding
 
 struct SymbolCode	{
+	// maximum Huffman code for the 32bit input has almost 48 bit length
+	// therefore, we need to restrict the code length to 32 upon encoding
+	// ... ore use 64 bit code!
 	dword	code;
 	byte	length;
 };
@@ -49,9 +58,9 @@ static int encode_stream(dword *const output, const byte *const input, const int
 		const int k2 = k + sc->length;
 		assert( !(sc->code >> sc->length) );
 		assert( k<k2 && k+32>=k2 );
-		output[k>>5] |= sc->code<<(k & 0x1F);
+		output[k>>5] |= sc->code << (k & 0x1F);
 		if((k>>5) != (k2>>5))	// next dword
-			output[k2>>5] = sc->code>>( 0x20-(k&0x1F) );
+			output[k2>>5] = sc->code >> ( 0x20-(k&0x1F) );
 		k = k2;
 	}
 	return k;
@@ -70,7 +79,7 @@ static void build_decoder()	{
 			if(!ps->length) continue;
 			while(j>0)	{
 				word *const px = pd + (j-=(1<<ps->length));
-				assert(!*px);
+				assert(!*px && "Inconsistent codes");
 				*px = 1; ++total;
 			}
 			assert(!j);
@@ -193,7 +202,7 @@ struct FunParam	{
 	const char *name;
 	void (*fun)(int);
 }static const 	pFun[] =	{
-	{"none",	optimize_none	},
+	//{"none",	optimize_none	},
 	{"freq",	optimize_freq	},
 	{"greedy",	optimize_greedy	},
 	{"matrix",	optimize_matrix	},
@@ -203,7 +212,7 @@ struct FunParam	{
 };
 
 struct Options read_command_line(const int ac, const char *av[])	{
-	struct Options o = { NULL, NULL, optimize_none, 20 };
+	struct Options o = { NULL, NULL, NULL, 20 };
 	int i,j;
 	for(i=1; i!=ac; ++i)	{
 		const char *par = av[i];
@@ -247,7 +256,7 @@ int main(const int argc, const char *argv[])	{
 		printf("Error: IO undefined\n");
 		return -1;
 	}
-	if( !opt.fOrder )	{
+	if( 0 && !opt.fOrder )	{
 		printf("Error: unknown order function\nTry one of these: ");
 		for(i=0; pFun[i].name; ++i)
 			printf("%s%s", i?", ":"", pFun[i].name);
@@ -293,17 +302,23 @@ int main(const int argc, const char *argv[])	{
 	memset( DC, 0, sizeof(DC) );
 	for(i=0; i!=0x100; ++i)
 		DC[CD[i]] = i;
-	//opt.fOrder(nd);
-	//for(i=0; i!=0x100; ++i)
-	//	CD[DC[i]] = i;
+	if (opt.fOrder)	{
+		opt.fOrder(nd);
+		for(i=0; i!=0x100; ++i)
+			CD[DC[i]] = i;
+	}
 	
 	// fill in the encoding table
 	memset(coder.encode, 0, sizeof(coder.encode) );
 	for(i=total_bits=0; i!=0x100; ++i)	{
 		struct SymbolCode *const ps = coder.encode + i;
 		ps->length = R1[i] ? BIT : 0;
-		//if(!i) ps->length = 30;
 		ps->code = CD[i];
+		if(0 && R1[i])	{
+			const int shift = 30 - ps->length;
+			ps->code <<= shift;
+			ps->length += shift;
+		}
 		total_bits += R1[i] * ps->length;
 	}
 	
@@ -350,6 +365,9 @@ int main(const int argc, const char *argv[])	{
 	printf("SufSort completed: %.3f sec\n",
 		(clock()-t0)*1.f / CLOCKS_PER_SEC );
 
+	if( VERIFY==VER_SORT )
+		memcpy(X,Y, SINT<<opt.radPow);
+
 	if(useItoh)	{
 		for(i=N; i--; )	{
 			const int prev = P[i];
@@ -363,29 +381,47 @@ int main(const int argc, const char *argv[])	{
 				int *const py = Y+key+1;
 				if(*py <= i)	{
 					const int to = --*py;
-					assert(X[key] <= to);
+					assert(VERIFY!=VER_IT || X[key] <= to);
 					assert(P[to] == -1);
 					P[to] = id;
 				}
 			}
 		}
+		assert( VERIFY!=VER_IT || !memcmp(X,Y+1, SINT<<opt.radPow) );
 		printf("IT-1 completed: %.2f bad elements\n", sorted*1.f/N);
 	}
 
 	if(opt.fOrder)	{
-		for(i=0; i!=256; ++i)
+		for(i=0; i!=0x100; ++i)
 			DC[CD[i]] = i;
 	}
+	
 	// prepare verification, not performance-critical
 	// for each symbol find the lowest string starting with it
-	memset(R1,0,sizeof(R1));
-	for(i=N; i--;)	{
-		const int next = P[i],
-			id = next - BIT;
-		//todo: scan backwards
-		R1[ get_char(id) ] = i;
+	for(i=0; VERIFY==VER_SORT && i!=0x100; ++i)	{
+		struct SymbolCode const* const sc = coder.encode + i;
+		if(!sc->length)	k = -1;				// skip it
+		else if(sc->length <= opt.radPow)	{ // good
+			const byte log = opt.radPow - sc->length;
+			k = X[sc->code << log];
+		}else	{ // bad situation
+			// enumerate the group manually
+			const byte log = sc->length - opt.radPow;	// bits to enumerate
+			const dword shift_code = sc->code >> log;			// known code
+			const dword rest_code = sc->code & ((1<<log)-1);	// code to compare
+			// scan the radix group
+			//todo: binary search
+			for(k=X[shift_code]; k!=X[shift_code+1]; ++k)	{
+				const dword key = get_key(P[k]-opt.radPow);
+				if( (key>>(32-log)) == rest_code)
+					break;
+			}
+			assert(k != X[shift_code+1]);
+		}
+		R1[i] = k;
 	}
-	// write output
+
+	// write the output
 	fx = fopen( opt.nameOut, "wb" );
 	assert(base_id >= 0);
 	fwrite(&base_id,4,1,fx);
@@ -400,12 +436,16 @@ int main(const int argc, const char *argv[])	{
 		}else	{
 			const int length = offset_length(v);
 			ch = get_char(v);
-			// verification
-			if(P[R1[ch]++] != v+length) break;
+			if( VERIFY==VER_SORT )	{
+				assert( R1[ch]>=0 );
+				if(P[R1[ch]++] != v+length) break;
+			}
 		}
 		fputc( ch, fx );
 	}
-	printf("Verification: %s\n", (i==N?"OK":"Failed") );
+	if( VERIFY==VER_SORT )	{
+		printf("Verification: %s\n", (i==N?"OK":"Failed") );
+	}
 	fclose(fx); fx = NULL;
 
 	// finish like a man
