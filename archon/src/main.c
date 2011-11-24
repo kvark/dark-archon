@@ -55,6 +55,28 @@ struct CodeMan	{
 }static coder;
 
 
+static dword build_encoder()	{
+	// fill in the encoding table
+	int i,k;
+	memset(coder.encode, 0, sizeof(coder.encode) );
+	assert(0<MAX_CODE_LENGTH && MAX_CODE_LENGTH<=32);
+	srand(RANDOM_LENGHT_TEST);
+	for(i=k=0; i!=0x100; ++i)	{
+		struct SymbolCode *const ps = coder.encode + i;
+		ps->length = R1[i] ? BIT : 0;
+		ps->code = CD[i];
+		if(RANDOM_LENGHT_TEST && R1[i])	{
+			const int shift = RANDOM_LENGHT_TEST - ps->length;
+			assert(shift>=0);
+			ps->code <<= shift;
+			ps->length += shift;
+		}
+		k += R1[i] * ps->length;
+	}
+	return k;
+}
+
+
 static int encode_stream(dword *const output, const byte *const input, const int num)	{
 	int i,k;
 	// transform input (k = dest bit index)
@@ -115,6 +137,7 @@ static void build_decoder()	{
 		}
 	}
 };
+
 
 
 //	Key access method	//
@@ -187,7 +210,7 @@ static dword advance_radix(int *const offset, const byte bits)	{
 	assert( bits <= 24 );
 	*offset = k;
 	return us >> (32-bits);
-	//return get_key(offset) >> (32-bits);
+	//return get_key(k) >> (32-bits);
 }
 
 
@@ -217,6 +240,37 @@ static void sort_bese(int *A, int *B, int depth)	{
 		A = x; B = z; depth += 32;
 	}
 }
+
+// Helper verification routine
+// for each symbol find the lowest string starting with it
+
+void prepare_verification(int const *const R, const byte power, int const *const P)	{
+	int i;
+	for(i=0; i!=0x100; ++i)	{
+		struct SymbolCode const* const sc = coder.encode + i;
+		int k;
+		if(!sc->length)	k = -1;				// skip it
+		else if(sc->length <= power)	{ // good
+			const byte log = power - sc->length;
+			k = R[sc->code << log];
+		}else	{ // worst case
+			// enumerate the radix group manually
+			const byte log = sc->length - power;	// bits to enumerate
+			const dword shift_code = sc->code >> log;			// known code
+			const dword rest_code = sc->code & ((1<<log)-1);	// code to compare
+			// scan the radix group
+			//todo: binary search
+			for(k=R[shift_code]; k!=R[shift_code+1]; ++k)	{
+				const dword key = get_key(P[k]-power);
+				if( (key>>(32-log)) == rest_code)
+					break;
+			}
+			assert(k != R[shift_code+1]);
+		}
+		R1[i] = k;
+	}
+}
+
 
 
 //	Global options	//
@@ -336,23 +390,7 @@ int main(const int argc, const char *argv[])	{
 			CD[DC[i]] = i;
 	}
 	
-	// fill in the encoding table
-	memset(coder.encode, 0, sizeof(coder.encode) );
-	assert(0<MAX_CODE_LENGTH && MAX_CODE_LENGTH<=32);
-	srand(RANDOM_LENGHT_TEST);
-	for(i=total_bits=0; i!=0x100; ++i)	{
-		struct SymbolCode *const ps = coder.encode + i;
-		ps->length = R1[i] ? BIT : 0;
-		ps->code = CD[i];
-		if(RANDOM_LENGHT_TEST && R1[i])	{
-			const int shift = RANDOM_LENGHT_TEST - ps->length;
-			assert(shift>=0);
-			ps->code <<= shift;
-			ps->length += shift;
-		}
-		total_bits += R1[i] * ps->length;
-	}
-	
+	total_bits = build_encoder();
 	build_decoder();
 	s_base = (byte*)malloc(termin + (total_bits>>3) + 4);
 	memset(s_base, -1, termin);
@@ -376,7 +414,7 @@ int main(const int argc, const char *argv[])	{
 		for(i=1<<opt.radPow, k=X[i]=Y[i]=N; i--;)
 			X[i] = (k -= X[i]);
 		memcpy( Y, X, SINT+(SINT<<opt.radPow) );
-		for(i=k=0; ++i!=N; )	{
+		for(i=k=0; i!=N; ++i)	{
 			const dword new_key = advance_radix( &k, opt.radPow );
 			long diff = (new_key<<1) - prev_key;
 			prev_key += diff;
@@ -384,6 +422,7 @@ int main(const int argc, const char *argv[])	{
 			else P[X[new_key]++] = k;
 		}
 		printf("Radix (%d bits) completed.\n", opt.radPow);
+		assert( k == total_bits );
 	}
 
 	for(i=0; i!=1<<opt.radPow; ++i)	{
@@ -423,30 +462,8 @@ int main(const int argc, const char *argv[])	{
 			DC[CD[i]] = i;
 	}
 	
-	// prepare verification, not performance-critical
-	// for each symbol find the lowest string starting with it
-	for(i=0; VERIFY==VER_SORT && i!=0x100; ++i)	{
-		struct SymbolCode const* const sc = coder.encode + i;
-		if(!sc->length)	k = -1;				// skip it
-		else if(sc->length <= opt.radPow)	{ // good
-			const byte log = opt.radPow - sc->length;
-			k = X[sc->code << log];
-		}else	{ // worst case
-			// enumerate the radix group manually
-			const byte log = sc->length - opt.radPow;	// bits to enumerate
-			const dword shift_code = sc->code >> log;			// known code
-			const dword rest_code = sc->code & ((1<<log)-1);	// code to compare
-			// scan the radix group
-			//todo: binary search
-			for(k=X[shift_code]; k!=X[shift_code+1]; ++k)	{
-				const dword key = get_key(P[k]-opt.radPow);
-				if( (key>>(32-log)) == rest_code)
-					break;
-			}
-			assert(k != X[shift_code+1]);
-		}
-		R1[i] = k;
-	}
+	if (VERIFY==VER_SORT)
+		prepare_verification( X, opt.radPow, P );
 
 	// write the output
 	fx = fopen( opt.nameOut, "wb" );
