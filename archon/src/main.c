@@ -18,7 +18,7 @@ enum	Verification	{
 }static const VERIFY = VER_SORT;
 
 enum	Constants	{
-	RANDOM_LENGHT_TEST	= 1,
+	RANDOM_LENGHT_TEST	= 0,
 	MAX_CODE_LENGTH		= 32,
 	COMPARE_BITS		= 32,
 	DECODE_BITS			= 12,
@@ -158,11 +158,13 @@ static struct SymbolCode const* (*const symbol_decode)(const dword) = symbol_dec
 //	Extract previous symbol code by offset	//
 
 static dword get_code(const int offset)	{
-	dword us = *(dword*)(source+(offset>>3)) >> (offset&7);
+	dword code = *(dword*)(source+(offset>>3)) >> (offset&7);
 	if (MAX_CODE_LENGTH>24)	{
-		us |= source[4+(offset>>3)] << (32-(offset&7));
+		const byte log = 32 - (offset&7);
+		const dword us = source[4+(offset>>3)] << 24;
+		code |= us << (8-(offset&7));
 	}
-	return us;
+	return code;
 }
 
 //	Symbol length on the offset method	//
@@ -343,8 +345,8 @@ int main(const int argc, const char *argv[])	{
 		ps->length = R1[i] ? BIT : 0;
 		ps->code = CD[i];
 		if(RANDOM_LENGHT_TEST && R1[i])	{
-			//const int shift = rand() % (30-ps->length) ;
-			const int shift = 30 - ps->length;
+			const int shift = RANDOM_LENGHT_TEST - ps->length;
+			assert(shift>=0);
 			ps->code <<= shift;
 			ps->length += shift;
 		}
