@@ -17,6 +17,14 @@ enum	Verification	{
 	VER_SORT
 }static const VERIFY = VER_SORT;
 
+enum	Constants	{
+	RANDOM_LENGHT_TEST	= 1,
+	MAX_CODE_LENGTH		= 32,
+	COMPARE_BITS		= 32,
+	DECODE_BITS			= 12,
+};
+
+
 int R1[0x100] = {0}, BIT;
 int R2[0x100][0x100] = {{0}};
 byte CD[0x100],DC[0x100];
@@ -41,12 +49,10 @@ struct SymbolCode	{
 };
 
 struct CodeMan	{
-#define DECODE_BITS	12
-	const	byte	DEBITS;
 	word	dec_offset[1+(1<<DECODE_BITS)];
 	byte	dec_list[0x100 + (1<<DECODE_BITS)];
 	struct SymbolCode	encode[0x100];
-}static coder = { DECODE_BITS };
+}static coder;
 
 
 static int encode_stream(dword *const output, const byte *const input, const int num)	{
@@ -57,7 +63,7 @@ static int encode_stream(dword *const output, const byte *const input, const int
 		struct SymbolCode const* const sc = coder.encode + symbol;
 		const int k2 = k + sc->length;
 		assert( !(sc->code >> sc->length) );
-		assert( k<k2 && k+32>=k2 );
+		assert( k<k2 && sc->length<=MAX_CODE_LENGTH );
 		output[k>>5] |= sc->code << (k & 0x1F);
 		if((k>>5) != (k2>>5))	// next dword
 			output[k2>>5] = sc->code >> ( 0x20-(k&0x1F) );
@@ -67,15 +73,15 @@ static int encode_stream(dword *const output, const byte *const input, const int
 };
 
 static void build_decoder()	{
-	const dword mask = (1<<coder.DEBITS)-1;
+	const dword mask = (1<<DECODE_BITS)-1;
 	int i, total = 0;
 	// collect bin frequencies
 	memset( coder.dec_offset, 0, sizeof(coder.dec_offset) );
 	for(i=0; i!=0x100; ++i)	{
 		struct SymbolCode *const ps = coder.encode + i;
 		word *const pd = coder.dec_offset + 1 + (ps->code & mask);
-		if(ps->length < coder.DEBITS)	{
-			int j = 1<<coder.DEBITS;
+		if(ps->length < DECODE_BITS)	{
+			int j = 1<<DECODE_BITS;
 			if(!ps->length) continue;
 			while(j>0)	{
 				word *const px = pd + (j-=(1<<ps->length));
@@ -97,8 +103,8 @@ static void build_decoder()	{
 	for(i=0; i!=0x100; ++i)	{
 		struct SymbolCode *const ps = coder.encode + i;
 		word *const pd = coder.dec_offset + 1 + (ps->code & mask);
-		if(ps->length < coder.DEBITS)	{
-			int j = 1<<coder.DEBITS;
+		if(ps->length < DECODE_BITS)	{
+			int j = 1<<DECODE_BITS;
 			if(!ps->length) continue;
 			while(j>0)	{
 				word *const px = pd + (j-=(1<<ps->length));
@@ -133,21 +139,31 @@ static struct SymbolCode const* symbol_decode_fixed(const dword data)	{
 	return &sc;
 }
 static struct SymbolCode const* symbol_decode_uni(const dword data)	{
-	const dword cod = data & ((1<<coder.DEBITS)-1);
+	dword cod = data & ((1<<DECODE_BITS)-1);
 	word *const ps = coder.dec_offset + cod;
 	const word limit = ps[1];
 	struct SymbolCode const* sc = NULL;
 	word i;
 	assert(ps[0] < limit);
 	for(i=ps[0]; ; ++i)	{
+		assert(i < limit);	// can be optimized a bit
 		sc = coder.encode + coder.dec_list[i];
-		if(++i==limit) break;
-		if((cod & ((1<<sc->length)-1)) == sc->code)
-			break;
+		cod = data & ((1<<sc->length)-1);
+		if(cod == sc->code)	break;
 	}
 	return sc;
 }
-static struct SymbolCode const* (*const symbol_decode)(const dword) = symbol_decode_fixed;
+static struct SymbolCode const* (*const symbol_decode)(const dword) = symbol_decode_uni;
+
+//	Extract previous symbol code by offset	//
+
+static dword get_code(const int offset)	{
+	dword us = *(dword*)(source+(offset>>3)) >> (offset&7);
+	if (MAX_CODE_LENGTH>24)	{
+		us |= source[4+(offset>>3)] << (32-(offset&7));
+	}
+	return us;
+}
 
 //	Symbol length on the offset method	//
 
@@ -155,18 +171,29 @@ static byte offset_length_fixed(const int offset)	{
 	return BIT;
 }
 static byte offset_length_uni(const int offset)	{
-	const dword key = get_key(offset+32);
-	return symbol_decode_uni(key)->length;
+	const dword code = get_code(offset);
+	return symbol_decode_uni(code)->length;
 }
 static byte (*const offset_length)(const int) = offset_length_uni;
 
 
+//	Radix helper routine	//
+
+static dword advance_radix(int *const offset, const byte bits)	{
+	const int k = *offset + offset_length(*offset);
+	const dword us = *(dword*)(source + (k>>3) - 3) << (8-(k&0x7));
+	assert( bits <= 24 );
+	*offset = k;
+	return us >> (32-bits);
+	//return get_key(offset) >> (32-bits);
+}
+
+
 //	Sorting		//
 
-static byte get_char(const int v)	{
-	const dword us = *(word*)(source+(v>>3)) >> (v&7);
-	struct SymbolCode const* sc = symbol_decode(us);
-	return DC[ sc->code ];
+static byte get_char(const int offset)	{
+	const dword us = get_code(offset);
+	return symbol_decode(us) - coder.encode;
 }
 
 
@@ -251,7 +278,6 @@ int main(const int argc, const char *argv[])	{
 	printf("Var BWT: Radix+BeSe\n");
 	printf("archon <f_in> <f_out> [-o alphabet_order]\n");
 	opt = read_command_line(argc,argv);
-	assert( opt.radPow <= 30 );
 	if( !opt.nameIn || !opt.nameOut )	{
 		printf("Error: IO undefined\n");
 		return -1;
@@ -310,11 +336,14 @@ int main(const int argc, const char *argv[])	{
 	
 	// fill in the encoding table
 	memset(coder.encode, 0, sizeof(coder.encode) );
+	assert(0<MAX_CODE_LENGTH && MAX_CODE_LENGTH<=32);
+	srand(RANDOM_LENGHT_TEST);
 	for(i=total_bits=0; i!=0x100; ++i)	{
 		struct SymbolCode *const ps = coder.encode + i;
 		ps->length = R1[i] ? BIT : 0;
 		ps->code = CD[i];
-		if(0 && R1[i])	{
+		if(RANDOM_LENGHT_TEST && R1[i])	{
+			//const int shift = rand() % (30-ps->length) ;
 			const int shift = 30 - ps->length;
 			ps->code <<= shift;
 			ps->length += shift;
@@ -331,8 +360,8 @@ int main(const int argc, const char *argv[])	{
 	assert( k == total_bits );
 	
 	for(k=0; k<total_bits; )	{
-		k += offset_length(k);
-		X[ get_key(k) >> (32-opt.radPow) ] += 1;
+		const dword key = advance_radix( &k, opt.radPow );
+		X[key] += 1;
 	}
 	assert(k == total_bits);
 	printf("Symbols (%d) compressed into %.2f bits/sym, using %d Kb of memory.\n",
@@ -346,14 +375,11 @@ int main(const int argc, const char *argv[])	{
 			X[i] = (k -= X[i]);
 		memcpy( Y, X, SINT+(SINT<<opt.radPow) );
 		for(i=k=0; ++i!=N; )	{
-			k += offset_length(k);
-			{
-				dword new_key = get_key(k) >> (32-opt.radPow);
-				long diff = (new_key<<1) - prev_key;
-				prev_key += diff;
-				if( useItoh && diff<0 ) ++prev_key;
-				else P[X[new_key]++] = k;
-			}
+			const dword new_key = advance_radix( &k, opt.radPow );
+			long diff = (new_key<<1) - prev_key;
+			prev_key += diff;
+			if( useItoh && diff<0 ) ++prev_key;
+			else P[X[new_key]++] = k;
 		}
 		printf("Radix (%d bits) completed.\n", opt.radPow);
 	}
@@ -370,14 +396,13 @@ int main(const int argc, const char *argv[])	{
 
 	if(useItoh)	{
 		for(i=N; i--; )	{
-			const int prev = P[i];
-			assert(prev > 0);
-			if(prev == total_bits)	{
+			int id = P[i];
+			assert(id > 0);
+			if(id == total_bits)	{
 				assert(base_id<0);
 				base_id = i;
 			}else	{
-				const int id = prev + offset_length(prev);
-				const dword key = get_key(id) >> (32-opt.radPow);
+				const dword key = advance_radix( &id, opt.radPow );
 				int *const py = Y+key+1;
 				if(*py <= i)	{
 					const int to = --*py;
@@ -404,8 +429,8 @@ int main(const int argc, const char *argv[])	{
 		else if(sc->length <= opt.radPow)	{ // good
 			const byte log = opt.radPow - sc->length;
 			k = X[sc->code << log];
-		}else	{ // bad situation
-			// enumerate the group manually
+		}else	{ // worst case
+			// enumerate the radix group manually
 			const byte log = sc->length - opt.radPow;	// bits to enumerate
 			const dword shift_code = sc->code >> log;			// known code
 			const dword rest_code = sc->code & ((1<<log)-1);	// code to compare
@@ -434,11 +459,12 @@ int main(const int argc, const char *argv[])	{
 			//todo: optimize it?
 			ch = get_char(0);
 		}else	{
-			const int length = offset_length(v);
+			const byte length = offset_length(v);
 			ch = get_char(v);
 			if( VERIFY==VER_SORT )	{
 				assert( R1[ch]>=0 );
-				if(P[R1[ch]++] != v+length) break;
+				if(P[R1[ch]++] != v+length)
+					break;
 			}
 		}
 		fputc( ch, fx );
