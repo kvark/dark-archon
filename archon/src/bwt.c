@@ -23,10 +23,10 @@ extern dword			coder_extract_code(byte const* const ptr, const int offset);
 // TYPES AND DATA
 
 enum	Verification	{
-	VER_NONE,
-	VER_IT,
-	VER_SORT
-}static const VERIFY = VER_SORT;
+	VF_NONE,
+	VF_IT,
+	VF_SORT
+}static const VERIFY = VF_SORT;
 
 
 enum	Constants	{
@@ -190,7 +190,7 @@ int bwt_read(FILE *const fx)	{
 void bwt_write(FILE *const fx)	{
 	int i;
 	assert(N>0);
-	if (VERIFY==VER_SORT)
+	if (VERIFY==VF_SORT)
 		prepare_verification();
 
 	assert(base_id >= 0);
@@ -206,7 +206,7 @@ void bwt_write(FILE *const fx)	{
 		}else	{
 			const byte length = offset_length(v);
 			ch = get_char(v);
-			if( VERIFY==VER_SORT )	{
+			if( VERIFY==VF_SORT )	{
 				assert( R1[ch]>=0 );
 				if(P[R1[ch]++] != v+length)
 					break;
@@ -214,7 +214,7 @@ void bwt_write(FILE *const fx)	{
 		}
 		fputc( ch, fx );
 	}
-	if( VERIFY==VER_SORT )	{
+	if( VERIFY==VF_SORT )	{
 			printf("Verification: %s\n", (i==N?"OK":"Failed") );
 	}
 	free(s_base);
@@ -293,7 +293,7 @@ int bwt_transform()	{
 		sorted += X[i]-Y[i];
 	}
 
-	if( VERIFY==VER_SORT )
+	if( VERIFY==VF_SORT )
 		memcpy(X,Y, SINT<<rad_bits);
 
 	if(useItoh)	{
@@ -308,13 +308,13 @@ int bwt_transform()	{
 				int *const py = Y+key+1;
 				if(*py <= i)	{
 					const int to = --*py;
-					assert(VERIFY!=VER_IT || X[key] <= to);
+					assert(VERIFY!=VF_IT || X[key] <= to);
 					assert(P[to] == -1);
 					P[to] = id;
 				}
 			}
 		}
-		assert( VERIFY!=VER_IT || !memcmp(X,Y+1, SINT<<rad_bits) );
+		assert( VERIFY!=VF_IT || !memcmp(X,Y+1, SINT<<rad_bits) );
 		printf("IT-1 completed: %.2f bad elements\n", sorted*1.f/N);
 	}
 
