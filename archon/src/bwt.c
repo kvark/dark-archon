@@ -19,6 +19,10 @@ extern void				coder_build_decoder();
 extern SymbolCodePtr	coder_decode_symbol(const dword);
 extern dword			coder_extract_code(byte const* const ptr, const int offset);
 
+//	Order methods
+extern void		order_init();
+extern unsigned	order_memory();
+
 
 // TYPES AND DATA
 
@@ -34,9 +38,8 @@ enum	Constants	{
 };
 
 
-int R1[0x100] = {0}, BIT;
-int R2[0x100][0x100] = {{0}};
-byte CD[0x100],DC[0x100];
+static int R1[0x100], BIT=0;
+static byte CD[0x100];
 static byte *source, *s_base;
 
 static const unsigned SINT = sizeof(int), useItoh=1, termin=10;
@@ -158,8 +161,8 @@ void prepare_verification()	{
 // EXTERNALS
 
 int bwt_memory()	{
-	return coder_memory() + N*SINT + 2*(SINT<<rad_bits) +
-		2*sizeof(CD)+sizeof(R1)+sizeof(R2);
+	return coder_memory() + order_memory() +
+		N*SINT + 2*(SINT<<rad_bits) + sizeof(CD)+sizeof(R1);
 }
 
 
@@ -225,15 +228,11 @@ void bwt_write(FILE *const fx)	{
 int bwt_transform()	{
 	int i, nd=0, sorted=0;
 	assert(N>0);
-	{	// zero & first order statistics
-		byte b = 0xFF, c = 0xFF;
-		for(i=0; i!=N; ++i)	{
-			const byte a = source[i];
-			R1[a] += 1;
-			if(a!=b) { c=b; b=a; }
-			R2[a][c] += 1;
-		}
-	}
+	order_init(source,N);
+	
+	memset(R1,0,sizeof(R1));
+	for(i=0; i!=N; ++i)
+		R1[source[i]] += 1;
 
 	for(CD[0]=i=0; i!=0xFF; ++i)
 		CD[i+1] = CD[i] + (R1[i]? 1:0);
@@ -242,10 +241,10 @@ int bwt_transform()	{
 	for(BIT=0; (1<<BIT)<nd; ++BIT);
 
 	// optimize
-	memset( DC, 0, sizeof(DC) );
+	/*memset( DC, 0, sizeof(DC) );
 	for(i=0; i!=0x100; ++i)
 		DC[CD[i]] = i;
-	/*if (opt.fOrder)	{
+	if (opt.fOrder)	{
 		opt.fOrder(nd);
 		for(i=0; i!=0x100; ++i)
 			CD[DC[i]] = i;

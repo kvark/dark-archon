@@ -9,9 +9,10 @@
 #include <stdlib.h>
 #include "common.h"
 
-extern int R1[0x100];
-extern int R2[0x100][0x100];
-extern byte DC[0x100];
+static int R2[0x100][0x100];
+static byte DC[0x100];
+
+static int* cur_sort_array = NULL;
 
 
 void print_order(FILE *const fd, const int nd, const char str[])	{
@@ -28,8 +29,30 @@ void print_order(FILE *const fd, const int nd, const char str[])	{
 }
 
 
+void order_init(byte const* const ptr, const int N)	{
+	byte b = 0xFF, c = 0xFF;
+	int i;
+	memset(R2,0,sizeof(R2));
+	// first order statistics
+	for(i=0; i!=N; ++i)	{
+		const byte a = ptr[i];
+		if(a!=b) { c=b; b=a; }
+		R2[a][c] += 1;
+	}
+}
+
+
+unsigned order_memory()	{
+	return sizeof(R2) + sizeof(DC);
+}
+
+
+//----------------------------------//
+//		Optimization routines		//
+
 int cmp_freq(const void *p0, const void *p1)	{
-	return	R1[*(byte*)p1] - R1[*(byte*)p0];
+	return	cur_sort_array[*(byte*)p1]-
+			cur_sort_array[*(byte*)p0];
 }
 
 void optimize_none(int nd)	{
@@ -37,6 +60,13 @@ void optimize_none(int nd)	{
 }
 
 void optimize_freq(int nd)	{
+	int i,j, freq[0x100];
+	cur_sort_array = freq;
+	for(i=0; i!=0x100; ++i)	{
+		freq[i] = 0;
+		for(j=0; j!=0x100; ++j)
+			freq[i] += R2[i][j];
+	}
 	qsort(DC, nd, sizeof(byte), cmp_freq);
 }
 
@@ -59,12 +89,6 @@ void optimize_matrix(int nd)	{
 }
 
 
-static int* cur_sort_array = NULL;
-
-static int cmp_dest(const void *p0, const void *p1)	{
-	return	cur_sort_array[*(byte*)p1]-
-			cur_sort_array[*(byte*)p0];
-}
 
 void topology(byte elem, int nd, byte *const stack, byte *const state, byte (*Dest)[0x100])	{
 	int j;
@@ -90,7 +114,7 @@ void optimize_topo(int nd)	{
 		for(j=0; j!=nd; ++j)
 			Dest[ci][j] = DC[j];
 		cur_sort_array = R2[ci];
-		qsort(Dest[ci],nd,1,cmp_dest);
+		qsort(Dest[ci],nd,1,cmp_freq);
 	}
 	topology(DC[0],nd,stack,state,Dest);	//start elem
 	memcpy(DC, stack, nd*sizeof(int));
