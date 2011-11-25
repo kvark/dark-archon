@@ -49,7 +49,7 @@ struct FunParam	{
 };
 
 struct Options read_command_line(const int ac, const char *av[])	{
-	struct Options o = { NULL, NULL, optimize_none, 10 };
+	struct Options o = { NULL, NULL, optimize_none, 20 };
 	int i,j;
 	for(i=1; i!=ac; ++i)	{
 		const char *par = av[i];

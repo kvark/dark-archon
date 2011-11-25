@@ -8,6 +8,15 @@
 #include <stdlib.h>
 #include "common.h"
 
+//	Huffman methods
+extern void					huff_init(byte);
+extern unsigned				huff_memory();
+extern int					huff_add(dword);
+extern struct SymbolCode	huff_extract(int);
+extern byte					huff_compute();
+
+
+// Types and Data
 
 enum	Constants	{
 	MAX_CODE_LENGTH		= 32,
@@ -29,16 +38,16 @@ SymbolCodePtr coder_base()	{
 }
 
 unsigned coder_memory()	{
-	return sizeof(dec_offset) + sizeof(dec_list) + sizeof(encode);
+	return huff_memory() +
+		sizeof(dec_offset) + sizeof(dec_list) + sizeof(encode);
 }
 
 
 //------------------------------------------------------------------------------//
-//	Build encoding table	//
+//	Build encoding table: fixed-bit variant		//
 //------------------------------------------------------------------------------//
 
-dword coder_build_encoder(int const *const freq, byte const *const trans, const byte bits)	{
-	// fill in the encoding table
+dword coder_build_encoder_fixed(int const *const freq, byte const *const trans, const byte bits)	{
 	int i,k;
 	memset(encode, 0, sizeof(encode) );
 	assert(0<MAX_CODE_LENGTH && MAX_CODE_LENGTH<=32);
@@ -54,6 +63,30 @@ dword coder_build_encoder(int const *const freq, byte const *const trans, const 
 			ps->length += shift;
 		}
 		k += freq[i] * ps->length;
+	}
+	return k;
+}
+
+
+//------------------------------------------------------------------------------//
+//	Build encoding table: huffman codes		//
+//------------------------------------------------------------------------------//
+
+dword coder_build_encoder(int const *const freq)	{
+	int i,k,q;
+	memset(encode, 0, sizeof(encode) );
+	assert(0<MAX_CODE_LENGTH && MAX_CODE_LENGTH<=32);
+	huff_init(MAX_CODE_LENGTH);
+	for(i=0; i!=0x100; ++i)	{
+		if(freq[i])
+			huff_add(freq[i]);
+	}
+	huff_compute();
+	for(i=k=q=0; i!=0x100; ++i)	{
+		if(!freq[i]) continue;
+		encode[i] = huff_extract(q);
+		k += freq[i] * encode[i].length;
+		++q;
 	}
 	return k;
 }
@@ -86,44 +119,47 @@ int coder_encode_stream(dword *const output, const byte *const input, const int 
 //------------------------------------------------------------------------------//
 
 void coder_build_decoder()	{
-	const dword mask = (1<<DECODE_BITS)-1;
 	int i, total = 0;
 	// collect bin frequencies
 	memset( dec_offset, 0, sizeof(dec_offset) );
 	for(i=0; i!=0x100; ++i)	{
 		SymbolCodePtr const ps = encode + i;
-		word *const pd = dec_offset + 1 + (ps->code & mask);
-		if(ps->length < DECODE_BITS)	{
-			int j = 1<<DECODE_BITS;
+		if(ps->length < DECODE_BITS)		{
+			const byte free_log = DECODE_BITS - ps->length;
+			const dword id = ps->code << free_log;
+			word *pd = dec_offset + 1 + id;
+			int j;
 			if(!ps->length) continue;
-			while(j>0)	{
-				word *const px = pd + (j-=(1<<ps->length));
-				assert(!*px && "Inconsistent codes");
-				*px = 1; ++total;
+			for(j=0; !(j>>free_log); ++j,++pd)	{
+				assert(!*pd && "Inconsistent codes");
+				*pd = 1; ++total;
 			}
-			assert(!j);
 		}else	{
-			++*pd; ++total;
+			// leave only required number of bits
+			const dword id = ps->code >> (ps->length - DECODE_BITS);
+			dec_offset[1+id] += 1; ++total;
 		}
 	}
 	assert(total < sizeof(dec_list));
 	// turn into bin offsets
-	for(i=mask+1; i; --i)	{
+	for(i=(1<<DECODE_BITS); i; --i)	{
 		dec_offset[i] = (total -= dec_offset[i]);
 	}
 	assert(!total);
 	// collect bins
 	for(i=0; i!=0x100; ++i)	{
 		SymbolCodePtr const ps = encode + i;
-		word *const pd = dec_offset + 1 + (ps->code & mask);
+		if(!ps->length) continue;
 		if(ps->length < DECODE_BITS)	{
-			int j = 1<<DECODE_BITS;
-			if(!ps->length) continue;
-			while(j>0)	{
-				word *const px = pd + (j-=(1<<ps->length));
-				dec_list[(*px)++] = i;
-			}
+			const byte free_log = DECODE_BITS - ps->length;
+			const dword id = ps->code << free_log;
+			word *pd = dec_offset + 1 + id;
+			int j;
+			for(j=0; !(j>>free_log); ++j,++pd)
+				dec_list[(*pd)++] = i;
 		}else	{
+			const dword id = ps->code >> (ps->length - DECODE_BITS);
+			word *const pd = dec_offset + 1 + id;
 			dec_list[(*pd)++] = i;
 		}
 	}
@@ -135,16 +171,17 @@ void coder_build_decoder()	{
 //------------------------------------------------------------------------------//
 
 SymbolCodePtr coder_decode_symbol(const dword data)	{
-	dword cod = data & ((1<<DECODE_BITS)-1);
+	dword cod = (data >> 8) >> (24-DECODE_BITS);
 	word *const ps = dec_offset + cod;
 	const word limit = ps[1];
 	SymbolCodePtr sc = NULL;
 	word i;
+	assert(DECODE_BITS <= 24);
 	assert(ps[0] < limit);
 	for(i=ps[0]; ; ++i)	{
 		assert(i < limit);	// can be optimized a bit
 		sc = encode + dec_list[i];
-		cod = data & ((1<<sc->length)-1);
+		cod = data >> (32-sc->length);
 		if(cod == sc->code)	break;
 	}
 	return sc;
@@ -152,7 +189,7 @@ SymbolCodePtr coder_decode_symbol(const dword data)	{
 
 
 //------------------------------------------------------------------------------//
-//	Extract symbol code to the left of the offset (in bits	//
+//	Extract symbol code to the left of the offset (in bits)	//
 //------------------------------------------------------------------------------//
 
 dword coder_extract_code(byte const* const ptr, const int offset)	{
