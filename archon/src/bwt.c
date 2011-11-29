@@ -45,7 +45,7 @@ enum	Constants	{
 static int R1[0x100], BIT=0;
 static byte *source=NULL, *s_base=NULL, *B=NULL;
 
-static const unsigned SINT = sizeof(int), useItoh=0, termin=10;
+static const unsigned SINT = sizeof(int), useItoh=1, termin=10;
 static int N=0, Nmax=0, Bmax=0, base_id=-1, total_bits=0;
 static byte rad_bits;
 static int *P=NULL,*X=NULL,*Y=NULL;
