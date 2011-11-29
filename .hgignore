@@ -3,7 +3,7 @@ syntax: glob
 bin
 obj
 data
-save
+files
 msvc*
 bugs
 *.o
