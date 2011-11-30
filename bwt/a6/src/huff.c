@@ -4,7 +4,9 @@
  */
 
 #include <assert.h>
+
 #include "common.h"
+#include "huff.h"
 
 
 // Types and Data

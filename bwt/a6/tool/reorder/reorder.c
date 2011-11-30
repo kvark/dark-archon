@@ -3,11 +3,11 @@
  *	project Archon (C) Dzmitry Malyshau, 2011
  */ 
 
-#include "common.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "common.h"
 
 
 static int log2i(int x)	{

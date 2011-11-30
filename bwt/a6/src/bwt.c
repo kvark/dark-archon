@@ -7,22 +7,11 @@
 #include <memory.h>
 #include <stdio.h>
 #include <stdlib.h>
+
 #include "common.h"
-
-
-//	Coder methods
-extern SymbolCodePtr	coder_base();
-extern unsigned			coder_memory();
-extern dword			coder_build_encoder_fixed(int const *const, const byte);
-extern dword			coder_build_encoder(int const *const);
-extern int				coder_encode_stream(dword *const, const byte *const, const int);
-extern void				coder_build_decoder();
-extern SymbolCodePtr	coder_decode_symbol(const dword);
-extern dword			coder_extract_code(byte const* const ptr, const int offset);
-
-//	Order methods
-extern void		order_init(byte const* const, const int);
-extern unsigned	order_memory();
+#include "bwt.h"
+#include "coder.h"
+#include "order.h"
 
 
 // TYPES AND DATA
@@ -174,7 +163,7 @@ static dword advance_radix(int *const bi)	{
 //	Report memory usage
 //------------------------------------------------------------------------------//
 
-int bwt_memory()	{
+unsigned bwt_memory()	{
 	return coder_memory() + order_memory() +
 		Nmax*SINT + 2*(SINT<<rad_bits) + sizeof(R1) + (Bmax>>2);
 }

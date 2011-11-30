@@ -7,24 +7,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+
 #include "common.h"
-
-
-//	BWT methods
-extern void		bwt_init(int,byte);
-extern void		bwt_exit();
-extern unsigned	bwt_memory();
-extern int		bwt_read(FILE *const);
-extern void		bwt_write(FILE *const);
-extern int		bwt_transform();
-
-//	Ordering methods
-extern void optimize_none(int);
-extern void optimize_freq(int);
-extern void optimize_greedy(int);
-extern void optimize_matrix(int);
-extern void optimize_topo(int);
-extern void optimize_bubble(int);
+#include "bwt.h"
+#include "order.h"
 
 
 //	Global options	//
@@ -39,17 +25,17 @@ struct FunParam	{
 	const char *name;
 	void (*fun)(int);
 }static const 	pFun[] =	{
-	{"none",	optimize_none	},
-	{"freq",	optimize_freq	},
-	{"greedy",	optimize_greedy	},
-	{"matrix",	optimize_matrix	},
-	{"topo",	optimize_topo	},
-	{"bubble",	optimize_bubble	},
+	{"none",	order_none	},
+	{"freq",	order_freq	},
+	{"greedy",	order_greedy	},
+	{"matrix",	order_matrix	},
+	{"topo",	order_topo	},
+	{"bubble",	order_bubble	},
 	{NULL,		NULL			}
 };
 
 struct Options read_command_line(const int ac, const char *av[])	{
-	struct Options o = { NULL, NULL, optimize_none, 20 };
+	struct Options o = { NULL, NULL, order_none, 20 };
 	int i,j;
 	for(i=1; i!=ac; ++i)	{
 		const char *par = av[i];
