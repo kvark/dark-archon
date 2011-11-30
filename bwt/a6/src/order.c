@@ -7,7 +7,9 @@
 #include <memory.h>
 #include <stdio.h>
 #include <stdlib.h>
+
 #include "common.h"
+#include "order.h"
 
 static int R2[0x100][0x100];
 static byte DC[0x100];
@@ -55,11 +57,11 @@ int cmp_freq(const void *p0, const void *p1)	{
 			cur_sort_array[*(byte*)p0];
 }
 
-void optimize_none(int nd)	{
+void order_none(int nd)	{
 	//dummy
 }
 
-void optimize_freq(int nd)	{
+void order_freq(int nd)	{
 	int i,j, freq[0x100];
 	cur_sort_array = freq;
 	for(i=0; i!=0x100; ++i)	{
@@ -71,7 +73,7 @@ void optimize_freq(int nd)	{
 }
 
 
-void optimize_matrix(int nd)	{
+void order_matrix(int nd)	{
 	int i,k;
 	//the algorithm is not correct! :(
 	FILE *const fd = fopen("matrix.txt","w");
@@ -90,7 +92,7 @@ void optimize_matrix(int nd)	{
 
 
 
-void topology(byte elem, int nd, byte *const stack, byte *const state, byte (*Dest)[0x100])	{
+static void topology(byte elem, int nd, byte *const stack, byte *const state, byte (*Dest)[0x100])	{
 	int j;
 	state[elem] = 1;
 	for(j=0; j!=nd; ++j)	{
@@ -102,7 +104,7 @@ void topology(byte elem, int nd, byte *const stack, byte *const state, byte (*De
 	stack[0] = elem;
 }
 
-void optimize_topo(int nd)	{
+void order_topo(int nd)	{
 	static byte Dest[0x100][0x100];
 	byte stack[0x100];
 	byte state[0x100];
@@ -121,7 +123,7 @@ void optimize_topo(int nd)	{
 }
 
 
-void optimize_bubble(int nd)	{
+void order_bubble(int nd)	{
 	int i;
 	qsort(DC, nd, sizeof(byte), cmp_freq);
 	for(;;)	{
@@ -140,7 +142,7 @@ void optimize_bubble(int nd)	{
 }
 
 
-void optimize_greedy(int nd)	{
+void order_greedy(int nd)	{
 	int i,p0=0,p1=nd;
 	int ins[256]={0},ots[256]={0};
 	printf("Greedy!\n");

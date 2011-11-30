@@ -6,14 +6,10 @@
 #include <assert.h>
 #include <memory.h>
 #include <stdlib.h>
-#include "common.h"
 
-//	Huffman methods
-extern void					huff_init(byte);
-extern unsigned				huff_memory();
-extern int					huff_add(dword);
-extern struct SymbolCode	huff_extract(int);
-extern byte					huff_compute();
+#include "common.h"
+#include "coder.h"
+#include "huff.h"
 
 
 // Types and Data
@@ -47,16 +43,18 @@ unsigned coder_memory()	{
 //	Build encoding table: fixed-bit variant		//
 //------------------------------------------------------------------------------//
 
-dword coder_build_encoder_fixed(int const *const freq, byte const *const trans, const byte bits)	{
-	int i,k;
+dword coder_build_encoder_fixed(int const *const freq, const byte bits)	{
+	int i,k,rank=0;
 	memset(encode, 0, sizeof(encode) );
 	assert(0<MAX_CODE_LENGTH && MAX_CODE_LENGTH<=32);
 	srand(RANDOM_LENGHT_TEST);
 	for(i=k=0; i!=0x100; ++i)	{
 		struct SymbolCode *const ps = encode + i;
 		ps->length = freq[i] ? bits : 0;
-		ps->code = trans[i];
-		if(RANDOM_LENGHT_TEST && freq[i])	{
+		ps->code = rank;
+		if(!freq[i]) continue;
+		++rank;
+		if(RANDOM_LENGHT_TEST)	{
 			const int shift = RANDOM_LENGHT_TEST - ps->length;
 			assert(shift>=0);
 			ps->code <<= shift;
