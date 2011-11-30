@@ -38,6 +38,17 @@ unsigned coder_memory()	{
 		sizeof(dec_offset) + sizeof(dec_list) + sizeof(encode);
 }
 
+//------------------------------------------------------------------------------//
+//	Build encoding table: trivial byte variant		//
+//------------------------------------------------------------------------------//
+
+void coder_build_encoder_byte()	{
+	int i;
+	for(i=0; i!=0x100; ++i)	{
+		encode[i].code = i;
+		encode[i].length = 8;
+	}
+}
 
 //------------------------------------------------------------------------------//
 //	Build encoding table: fixed-bit variant		//
@@ -53,7 +64,7 @@ dword coder_build_encoder_fixed(int const *const freq, const byte bits)	{
 		ps->length = freq[i] ? bits : 0;
 		ps->code = rank;
 		if(!freq[i]) continue;
-		++rank;
+		dec_list[rank++] = i;
 		if(RANDOM_LENGHT_TEST)	{
 			const int shift = RANDOM_LENGHT_TEST - ps->length;
 			assert(shift>=0);
@@ -163,6 +174,18 @@ void coder_build_decoder()	{
 	}
 };
 
+//------------------------------------------------------------------------------//
+//	Decode a symbol from the binary code: fixed-bit version	//
+//------------------------------------------------------------------------------//
+
+SymbolCodePtr coder_decode_symbol_fixed(const dword data)	{
+	const byte bits = encode[dec_list[0]].length;
+	const dword code = data>>(32-bits);
+	const byte ch = dec_list[code];
+	const SymbolCodePtr ptr = encode + ch;
+	assert(ptr->code == code && ptr->length == bits);
+	return ptr;
+}
 
 //------------------------------------------------------------------------------//
 //	Decode a symbol from the binary code	//
