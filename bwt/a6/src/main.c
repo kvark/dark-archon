@@ -114,6 +114,10 @@ int main(const int argc, const char *argv[])	{
 
 	// read input & allocate memory
 	fx = fopen( opt.name_in, "rb" );
+	if(!fx)	{
+		printf("Error: unable to open input file!\n");
+		return -3;
+	}
 	fseek(fx,0,SEEK_END);
 	N = ftell(fx);
 	bwt_init( N, opt.rad_pow, opt.key_conf );
@@ -129,6 +133,10 @@ int main(const int argc, const char *argv[])	{
 		(clock()-t0)*1.f / CLOCKS_PER_SEC );
 	
 	fx = fopen( opt.name_out, "wb" );
+	if(!fx)	{
+		printf("Error: unable to open output file!\n");
+		return -3;
+	}
 	bwt_write(fx);
 	fclose(fx); fx = NULL;
 

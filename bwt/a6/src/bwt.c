@@ -49,7 +49,8 @@ struct Configuration	{
 	SymbolCodePtr (*decode_symbol)(const dword);
 	byte (*offset_length)(const int);
 	byte (*get_char)(const int);
-} static config = {NULL,NULL,NULL,NULL,NULL};
+	void (*move_right)(int*const);
+} static config = {NULL,NULL,NULL,NULL,NULL,NULL,NULL};
 
 //	Coder start	//
 
@@ -131,7 +132,7 @@ static byte offset_length_var(const int offset)	{
 	return config.decode_symbol(code)->length;
 }
 
-//	Sorting		//
+//	Get char for BWT and verification		//
 
 static byte get_char_byte(const int offset)	{
 	return source[(offset>>3)-1];
@@ -140,6 +141,20 @@ static byte get_char_byte(const int offset)	{
 static byte get_char_uni(const int offset)	{
 	const dword us = config.get_key(offset);
 	return config.decode_symbol(us) - coder_base();
+}
+
+//	Shift to the character to the right		//
+
+static byte is_border(int bi)	{
+	return B[bi>>3] & (1<<(bi&7));
+}
+
+static void move_right_fixed(int *const offset)	{
+	*offset += BIT;
+}
+
+static void move_right_var(int *const offset)	{
+	while( !is_border(++*offset) );
 }
 
 
@@ -200,13 +215,13 @@ static void prepare_verification()	{
 	}
 }
 
-static byte is_border(int bi)	{
-	return B[bi>>3] & (1<<(bi&7));
-}
 
-//todo: optimize for byte streams
+//------------------------------------------------------------------------------//
+//	Very useful routine of going right and returning the bucket
+//------------------------------------------------------------------------------//
+
 static dword advance_radix(int *const bi)	{
-	while( !is_border(++*bi) );
+	config.move_right(bi);
 	assert( rad_bits<=24 );
 	return (config.get_key(*bi) >> 8) >> (24-rad_bits);
 }
@@ -231,9 +246,9 @@ unsigned bwt_memory()	{
 void bwt_init(int maxN, byte radix, enum KeyConfig conf_id)	{
 	// set key config
 	struct Configuration const config_array[] =	{
-		{bwt_start_byte,	bwt_encode_byte,	get_key_byte,	decode_symbol_byte,			offset_length_fixed,	get_char_byte},	//byte
-		{bwt_start_fixed,	bwt_encode_fixed,	get_key_fixed,	coder_decode_symbol_fixed,	offset_length_fixed,	get_char_uni},	//fixed-bit
-		{bwt_start_var,		bwt_encode_uni,		get_key_fixed,	coder_decode_symbol,		offset_length_var,		get_char_uni},	//var-bit
+		{bwt_start_byte,	bwt_encode_byte,	get_key_byte,	decode_symbol_byte,			offset_length_fixed,	get_char_byte,	move_right_fixed	},	//byte
+		{bwt_start_fixed,	bwt_encode_fixed,	get_key_fixed,	coder_decode_symbol_fixed,	offset_length_fixed,	get_char_uni,	move_right_fixed	},	//fixed-bit
+		{bwt_start_var,		bwt_encode_uni,		get_key_fixed,	coder_decode_symbol,		offset_length_var,		get_char_uni,	move_right_var		},	//var-bit
 	};
 	config = config_array[conf_id];
 	assert(conf_id != KEY_BYTE || !(radix&0x7));
