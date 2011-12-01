@@ -16,10 +16,15 @@
 //	Global options	//
 
 struct Options	{
+	// variables
 	const char *name_in, *name_out;
 	enum KeyConfig key_conf;
-	void (*f_order)(int);
 	unsigned rad_pow;
+	// functors
+	void (*f_order)(int);
+	int	(*f_read)(FILE *const);
+	void (*f_transform)();
+	void (*f_write)(FILE *const);
 };
 
 struct OrderFunParam	{
@@ -42,12 +47,12 @@ struct KeyFunParam	{
 	{"byte",	KEY_BYTE},
 	{"fix",		KEY_FIXED},
 	{"var",		KEY_VARIABLE},
-	{NULL,		KEY_NONE}
+	{NULL,		KEY_NONE},
 };
 
 
 struct Options read_command_line(const int ac, const char *av[])	{
-	struct Options o = { NULL, NULL, KEY_BYTE, order_none, 16 };
+	struct Options o = { NULL, NULL, KEY_BYTE, 16, order_none, bwt_read, bwt_transform, bwt_write };
 	int i,j;
 	for(i=1; i!=ac; ++i)	{
 		const char *par = av[i];
@@ -72,6 +77,13 @@ struct Options read_command_line(const int ac, const char *av[])	{
 				printf("Unknow parameter: %s\n",par);
 			}
 		}else
+		if( !strcmp(par,"un") )	{
+			o.rad_pow = 0;
+			o.key_conf = KEY_UNPACK;
+			o.f_read = unbwt_read;
+			o.f_transform = unbwt_transform;
+			o.f_write = unbwt_write;
+		}else
 		if(!o.name_in)	{
 			o.name_in = par;
 		}else if(!o.name_out)	{
@@ -90,8 +102,14 @@ int main(const int argc, const char *argv[])	{
 	time_t t0 = 0; FILE *fx = NULL;
 	int i,N; struct Options opt;
 	
-	printf("Var BWT: Radix+BeSe\n");
-	printf("archon <f_in> <f_out> [-r radix_power] [-o alphabet_order] [-c compression_type]\n");
+	printf("Archon6 var-len suffix sorter\n"
+		"format: archon <fIn> <fOut> [un | <options>]\n"
+		"where options are:\n"
+		"\t-r <iRadixPower>\n"
+		"\t-o <sAlphabetOrder>\n"
+		"\t-c <sCompressionType>\n"
+		);
+
 	opt = read_command_line(argc,argv);
 	if( !opt.name_in || !opt.name_out )	{
 		printf("Error: IO undefined\n");
@@ -122,14 +140,14 @@ int main(const int argc, const char *argv[])	{
 	N = ftell(fx);
 	bwt_init( N, opt.rad_pow, opt.key_conf );
 	fseek(fx,0,SEEK_SET);
-	bwt_read(fx);
+	opt.f_read(fx);
 	fclose(fx); fx = NULL;
 	printf("Loaded: %d kb; Allocated %d kb\n", N>>10, bwt_memory()>>10 );
 
 	t0 = clock();
-	bwt_transform();
+	opt.f_transform();
 
-	printf("SufSort completed: %.3f sec\n",
+	printf("Transformation completed: %.3f sec\n",
 		(clock()-t0)*1.f / CLOCKS_PER_SEC );
 	
 	fx = fopen( opt.name_out, "wb" );
@@ -137,7 +155,7 @@ int main(const int argc, const char *argv[])	{
 		printf("Error: unable to open output file!\n");
 		return -3;
 	}
-	bwt_write(fx);
+	opt.f_write(fx);
 	fclose(fx); fx = NULL;
 
 	bwt_exit();
