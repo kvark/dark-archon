@@ -98,9 +98,21 @@ struct Options read_command_line(const int ac, const char *av[])	{
 
 //	Main entry point	//
 
+static void get_time(time_t *const t)	{
+	*t = clock();
+	//time(t);
+}
+
+static double get_diff(time_t t1, time_t t2)	{
+	//return difftime(t1,t2);
+	return (t1-t2)*1.f / CLOCKS_PER_SEC;
+}
+
+
 int main(const int argc, const char *argv[])	{
-	time_t t0 = 0; FILE *fx = NULL;
-	int i,N; struct Options opt;
+	time_t t0=0,t1=0,t2=0; double elapsed = 0.f;
+	FILE *fx = NULL; int i,N;
+	struct Options opt;
 	
 	printf("Archon6 var-len suffix sorter\n"
 		"format: archon <fIn> <fOut> [un | <options>]\n"
@@ -140,15 +152,15 @@ int main(const int argc, const char *argv[])	{
 	N = ftell(fx);
 	bwt_init( N, opt.rad_pow, opt.key_conf );
 	fseek(fx,0,SEEK_SET);
+	get_time(&t0);
 	opt.f_read(fx);
 	fclose(fx); fx = NULL;
 	printf("Loaded: %d kb; Allocated %d kb\n", N>>10, bwt_memory()>>10 );
 
-	t0 = clock();
+	get_time(&t1);
 	opt.f_transform();
-
-	printf("Transformation completed: %.3f sec\n",
-		(clock()-t0)*1.f / CLOCKS_PER_SEC );
+	get_time(&t2);	elapsed = get_diff(t2,t1);
+	printf("Transformation completed: %.3f sec\n", elapsed);
 	
 	fx = fopen( opt.name_out, "wb" );
 	if(!fx)	{
@@ -157,6 +169,9 @@ int main(const int argc, const char *argv[])	{
 	}
 	opt.f_write(fx);
 	fclose(fx); fx = NULL;
+
+	get_time(&t2);	elapsed = get_diff(t2,t0);
+	printf("Transform+IO time: %.3f sec\n", elapsed);
 
 	bwt_exit();
 	printf("Done\n");
