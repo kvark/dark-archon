@@ -235,7 +235,9 @@ static dword advance_radix(int *const bi)	{
 
 unsigned bwt_memory()	{
 	return coder_memory() + order_memory() +
-		Nmax*SINT + 2*(SINT<<rad_bits) + sizeof(R1) + (Bmax>>2);
+		Nmax*SINT + sizeof(R1) +
+		(X||Y ? 2*(SINT<<rad_bits) : 0)+
+		(B ? (Bmax>>2) : 0);
 }
 
 
@@ -257,12 +259,15 @@ void bwt_init(int maxN, byte radix, enum KeyConfig conf_id)	{
 	Bmax = maxN<<3;
 	assert( termin>0 && maxN>0 && maxN<=(1<<30) );
 	// todo: allocate one large memory block
-	X = (int*)malloc( SINT+(SINT<<rad_bits) );
-	Y = (int*)malloc( SINT+(SINT<<rad_bits) );
-	memset( X, 0, SINT<<rad_bits );
+	if(conf_id != KEY_UNPACK)	{
+		X = (int*)malloc( SINT+(SINT<<rad_bits) );
+		Y = (int*)malloc( SINT+(SINT<<rad_bits) );
+		memset( X, 0, SINT<<rad_bits );
+	}
 	P = (int*)malloc( (Nmax+1)*SINT );
 	s_base = (byte*)malloc( termin+(Bmax>>3)+4 );
-	B = (byte*)malloc( (Bmax>>3)+1 );
+	if(conf_id == KEY_VARIABLE)
+		B = (byte*)malloc( (Bmax>>3)+1 );
 }
 
 
@@ -271,10 +276,19 @@ void bwt_init(int maxN, byte radix, enum KeyConfig conf_id)	{
 //------------------------------------------------------------------------------//
 
 void bwt_exit()	{
-	assert(s_base && P && X && Y && B);
-	free(X); free(Y);
-	free(P);
-	free(s_base); free(B);
+	if(X||Y)	{
+		free(X); free(Y);
+		X = Y = NULL;
+	}
+	if(P || s_base)	{
+		free(P); free(s_base);
+		P = NULL;
+		s_base = NULL;
+	}
+	if(B)	{
+		free(B);
+		B = NULL;
+	}
 }
 
 
@@ -309,12 +323,12 @@ void bwt_write(FILE *const fx)	{
 		assert(v>0);
 		if(v == total_bits)	{
 			int v2=0;
-			advance_radix(&v2);	// we just need the offset
+			advance_radix(&v2);
 			//todo: optimize it?
 			ch = config.get_char(v2);
 		}else	{
 			int v2=v;
-			advance_radix(&v2);	// we just need the offset
+			advance_radix(&v2);
 			ch = config.get_char(v2);
 			if( VERIFY==VF_SORT )	{
 				assert( R1[ch]>=0 );
@@ -355,13 +369,17 @@ int bwt_transform()	{
 	{	// radix sort
 		dword prev_key = 2<<rad_bits;
 		int k;
-		memset( B, 0, (total_bits>>3)+1 );
-		B[0] = 1;
+		if(B)	{
+			memset( B, 0, (total_bits>>3)+1 );
+			B[0] = 1;
+		}
 		// gather frequencies
 		for(k=total_bits; k>0; )	{
 			const dword key = config.get_key(k);
 			const SymbolCodePtr sc = config.decode_symbol(key);
-			B[k>>3] |= 1<<(k&7);
+			if(B)	{
+				B[k>>3] |= 1<<(k&7);
+			}
 			k -= sc->length;
 			X[(key>>8) >> (24-rad_bits)] += 1;
 		}
@@ -417,4 +435,43 @@ int bwt_transform()	{
 		base_id = i;
 	}
 	return base_id;
+}
+
+
+//------------------------------------------------------------------------------//
+//	Perform the reverse BWT
+//------------------------------------------------------------------------------//
+
+int unbwt_read(FILE *const fx)	{
+	source = s_base;
+	if(!fread( &base_id, sizeof(base_id), 1, fx ))
+		return -1;
+	N = fread(source,1,Nmax,fx);
+	return N;
+}
+
+static void roll(const int i)	{
+	P[i] = R1[source[i]]++;
+	assert(N==1 || i != P[i]);
+}
+
+void unbwt_transform()	{
+	int i,k;
+	memset( R1, 0, sizeof(R1) );
+	memset( P, -1, (N+1)*SINT );		//for debug
+	for(i=0; i!=N; ++i)
+		R1[source[i]] += 1;
+	for(k=N,i=0x100; i--;)	{
+		R1[i] = (k-=R1[i]);
+	}
+	for(i=0; i<base_id; i++)	roll(i);
+	for(i=base_id+1; i<N; i++)	roll(i);
+	roll(base_id);
+}
+
+void unbwt_write(FILE *const fx)	{
+	int i,k;
+	for(i=0,k=base_id; i!=N; ++i,k=P[k])
+		putc(source[k],fx);
+	assert(k == base_id);
 }
