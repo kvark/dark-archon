@@ -193,7 +193,7 @@ static void prepare_verification()	{
 	for(i=0; i!=0x100; ++i)	{
 		struct SymbolCode const* const sc = coder_base() + i;
 		int k;
-		if(!sc->length)	k = -1;				// skip it
+		if(!R1[i])	k = -1;				// skip it
 		else if(sc->length <= rad_bits)	{ // good
 			const byte log = rad_bits - sc->length;
 			k = X[sc->code << log];
@@ -213,17 +213,6 @@ static void prepare_verification()	{
 		}
 		R1[i] = k;
 	}
-}
-
-
-//------------------------------------------------------------------------------//
-//	Very useful routine of going right and returning the bucket
-//------------------------------------------------------------------------------//
-
-static dword advance_radix(int *const bi)	{
-	config.move_right(bi);
-	assert( rad_bits<=24 );
-	return (config.get_key(*bi) >> 8) >> (24-rad_bits);
 }
 
 
@@ -263,6 +252,9 @@ void bwt_init(int maxN, byte radix, enum KeyConfig conf_id)	{
 		X = (int*)malloc( SINT+(SINT<<rad_bits) );
 		Y = (int*)malloc( SINT+(SINT<<rad_bits) );
 		memset( X, 0, SINT<<rad_bits );
+	}else	{
+		// store the destination string
+		B = (byte*)malloc(Nmax);
 	}
 	P = (int*)malloc( (Nmax+1)*SINT );
 	s_base = (byte*)malloc( termin+(Bmax>>3)+4 );
@@ -322,13 +314,12 @@ void bwt_write(FILE *const fx)	{
 		byte ch=0;
 		assert(v>0);
 		if(v == total_bits)	{
-			int v2=0;
-			advance_radix(&v2);
-			//todo: optimize it?
+			int v2=0;	//todo: optimize it?
+			config.move_right(&v2);
 			ch = config.get_char(v2);
 		}else	{
 			int v2=v;
-			advance_radix(&v2);
+			config.move_right(&v2);
 			ch = config.get_char(v2);
 			if( VERIFY==VF_SORT )	{
 				assert( R1[ch]>=0 );
@@ -347,6 +338,13 @@ void bwt_write(FILE *const fx)	{
 //------------------------------------------------------------------------------//
 //	Perform the Burrows-Wheeler transformation
 //------------------------------------------------------------------------------//
+
+//	A useful routine of going right and returning the bucket
+static dword advance_radix(int *const bi)	{
+	config.move_right(bi);
+	assert( rad_bits<=24 );
+	return (config.get_key(*bi) >> 8) >> (24-rad_bits);
+}
 
 int bwt_transform()	{
 	int i, sorted=0;
@@ -391,9 +389,11 @@ int bwt_transform()	{
 		memcpy( Y, X, SINT+(SINT<<rad_bits) );
 		// fill bad suffixes
 		for(k=0; k<total_bits;)	{
+			const int k_old = k;
 			const dword new_key = advance_radix(&k);
 			long diff = (new_key<<1) - prev_key;
 			prev_key += diff;
+			assert( rad_bits >= k-k_old );
 			if( useItoh && diff<0 ) ++prev_key;
 			else P[X[new_key]++] = k;
 		}
@@ -406,8 +406,9 @@ int bwt_transform()	{
 		sorted += X[i]-Y[i];
 	}
 
-	if( VERIFY==VF_SORT )
+	if( VERIFY==VF_SORT )	{
 		memcpy(X,Y, SINT<<rad_bits);
+	}
 
 	if(useItoh)	{
 		P[N] = 0;
@@ -474,4 +475,51 @@ void unbwt_write(FILE *const fx)	{
 	for(i=0,k=base_id; i!=N; ++i,k=P[k])
 		putc(source[k],fx);
 	assert(k == base_id);
+}
+
+//------------------------------------------------------------------------------//
+//	Perform the optimized reverse BWT
+//------------------------------------------------------------------------------//
+
+void unbwt_transform_fast()	{
+	int i, k=base_id, len=0, k_start=-1;
+	if(!N) return;
+	unbwt_transform();
+	// now be smart!
+	source[P[N]=N] = ~source[N-1];
+	for(i=0; i!=N; )	{
+		const int k_next = P[k];
+		if(k_next<0)	{ // jump!
+			const int s_pos = -k_next-1;
+			const int dest = P[k-1];
+			assert(dest>=0);
+			len = P[dest];	//todo: cut the chain if jumping
+			assert(len>0 && s_pos<i && i+len<=N);
+			memcpy(B+i,B+s_pos,len);
+			k_start = k = dest + 1;
+			i+=len; len=0;
+		}else	{
+			B[i] = source[k];
+			if(source[k] != source[k+1])	{
+				if(len>1)	{
+					assert(k_start>=N-2 || P[k_start+2]>=0);
+					P[k_start] = k;
+					P[k_start+1] = -(i-len)-1;
+					assert(k>=N-1 || P[k+1]>=0);
+					P[k] = len;
+				}
+				len = 0;
+				k_start = k_next;
+			}else	{
+				//assert(P[k]+1 == P[k+1]);
+				++len;
+			}
+			k=k_next; ++i;
+		}
+	}
+	assert(k == base_id);
+}
+
+void unbwt_write_fast(FILE *const fx)	{
+	fwrite(B,1,N,fx);
 }
