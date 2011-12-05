@@ -73,16 +73,16 @@ struct Options read_command_line(const int ac, const char *av[])	{
 				par = av[++i]; assert(i!=ac);
 				sscanf( par, "%d", &o.rad_pow );
 				break;
+			case 'u':
+				o.rad_pow = 0;
+				o.key_conf = KEY_UNPACK;
+				o.f_read = unbwt_read;
+				o.f_transform = unbwt_transform_fast;
+				o.f_write = unbwt_write_fast;
+				break;
 			default:
 				printf("Unknow parameter: %s\n",par);
 			}
-		}else
-		if( !strcmp(par,"un") )	{
-			o.rad_pow = 0;
-			o.key_conf = KEY_UNPACK;
-			o.f_read = unbwt_read;
-			o.f_transform = unbwt_transform;
-			o.f_write = unbwt_write;
 		}else
 		if(!o.name_in)	{
 			o.name_in = par;
@@ -115,7 +115,7 @@ int main(const int argc, const char *argv[])	{
 	struct Options opt;
 	
 	printf("Archon6 var-len suffix sorter\n"
-		"format: archon <fIn> <fOut> [un | <options>]\n"
+		"format: archon <fIn> <fOut> [-u | <options>]\n"
 		"where options are:\n"
 		"\t-r <iRadixPower>\n"
 		"\t-o <sAlphabetOrder>\n"

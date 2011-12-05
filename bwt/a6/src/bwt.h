@@ -17,3 +17,5 @@ int			bwt_transform();
 int			unbwt_read(FILE *const);
 void		unbwt_transform();
 void		unbwt_write(FILE *const);
+void		unbwt_transform_fast();
+void		unbwt_write_fast(FILE *const);
