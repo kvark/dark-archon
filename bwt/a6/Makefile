@@ -1,4 +1,4 @@
-COMPILE=gcc -Wall -std=c99
+COMPILE=gcc -Wall -std=c99 -g3 -m32
 
 all:	main reodrer compress
 
