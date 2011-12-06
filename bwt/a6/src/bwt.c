@@ -492,6 +492,7 @@ void unbwt_transform_fast()	{
 		if(k_next<0)	{ // jump!
 			const int s_pos = -k_next-1;
 			const int dest = P[k-1];
+			assert(!k || P[k+1]>=0);
 			assert(dest>=0);
 			len = P[dest];	//todo: cut the chain if jumping
 			assert(len>0 && s_pos<i && i+len<=N);
@@ -501,7 +502,7 @@ void unbwt_transform_fast()	{
 		}else	{
 			B[i] = source[k];
 			if(source[k] != source[k+1])	{
-				if(len>1)	{
+				if(len>1 && (k+2>=N || P[k+2]>=0) && (k_start+2>=N || P[k_start+2]>=0))	{
 					assert(k_start>=N-2 || P[k_start+2]>=0);
 					P[k_start] = k;
 					P[k_start+1] = -(i-len)-1;

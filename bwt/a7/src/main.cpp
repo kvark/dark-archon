@@ -8,14 +8,15 @@ int main(const int argc, const char *const argv[])	{
 	printf("Archon-7 prototype\n");
 	if(argc != 3)
 		return -1;
-	printf("Reading...\n");
+	printf("Initializing...\n");
 	fx = fopen(argv[1],"rb");
-	fseek(fx,0,SEEK_END);
 	if(!fx)
 		return -2;
+	fseek(fx,0,SEEK_END);
 	const int N = ftell(fx);
 	fseek(fx,0,SEEK_SET);
 	Archon ar(N);
+	printf("Reading...\n");
 	ar.read(fx);
 	fclose(fx);
 	printf("Computing...\n");
