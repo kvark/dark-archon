@@ -77,8 +77,8 @@ struct Options read_command_line(const int ac, const char *av[])	{
 				o.rad_pow = 0;
 				o.key_conf = KEY_UNPACK;
 				o.f_read = unbwt_read;
-				o.f_transform = unbwt_transform_fast;
-				o.f_write = unbwt_write_fast;
+				o.f_transform = unbwt_transform;
+				o.f_write = unbwt_write;
 				break;
 			default:
 				printf("Unknow parameter: %s\n",par);
