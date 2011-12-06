@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <memory.h>
 #include <stdio.h>
 
@@ -67,39 +68,56 @@ class	Sais	{
 	}
 
 	void reduce()	{
-		buckets();
-		memset( P, -1, N*sizeof(suffix) );
 		int i;
+		memset( P, -1, N*sizeof(suffix) );
+		// scatter LMS into bucket positions
+		buckets();
 		for(i=0; i<N; ++i)	{
 			if(isElbow(i))
 				P[--RE[data[i]]] = i;
 		}
+		// induce uncertain positions of all other strings
+		//note: this seems to be unnecessary
 		induce<0>();
 		induce<1>();
-		n1 = 0;
-		for(i=0; i<N; ++i)	{
-			if(isElbow(P[i]))
-				P[n1++] = P[i];
+		// pack LMS into the first n1 suffixes
+		for(n1=i=0; i<N; ++i)	{
+			const suffix pos = P[i];
+			assert( pos>=0 );
+			if(isElbow(pos))
+				P[n1++] = pos;
 		}
+		// compare LMS substrings char by char
+		// with LMS signs as delimeters
+		// to define the first set of values
+		// and write them into [n1,2*n1)
 		memset( P+n1, -1, (N-n1)*sizeof(suffix) );
 		int prev=-1;
 		name = 0;
 		for(i=0; i<n1; ++i)	{
 			suffix pos = P[i];
 			bool diff = false;
+			// apparently, we compare the next LMS substring with the previous one
 			for(int d=0; d<N; ++d)	{
 				if(prev<0 || data[pos-d]!=data[prev-d] || isLimit(pos-d) != isLimit(prev-d))	{
 					diff = true; break;
 				}else if(d>0 && (isElbow(pos-d) || isElbow(prev-d)))
 					break;
-				if(diff) { ++name; prev=pos; }
-				pos >>= 1;
-				P[n1+pos] = name-1;
 			}
+			if(diff) {
+				// this one is different - remember it
+				++name; prev=pos;
+			}
+			// write somewhere in the accessible area
+			// it's guraranteed that no two LMS are together
+			// therefore we can divide the index by two here
+			P[n1+(pos>>1)] = name-1;	
 		}
+		// pack values into the last n1 suffixes
 		int j;
 		for(i=j=N-1; i>=n1; --i)		{
-			if(P[i]>=0) P[--j]=P[i];
+			if(P[i]>=0)
+				P[--j]=P[i];
 		}
 	}
 
