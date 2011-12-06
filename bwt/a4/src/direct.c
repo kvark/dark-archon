@@ -88,7 +88,7 @@ __inline static dword marked(int id)	{assert(id>=0); return BAR(&);}
 
 #ifdef USE_BKAN
 static int * towuse(int *A, int num, int *depth)	{
-	int per=*depth-5, k=0, *ank=NULL;
+	int per=*depth-5, k=0, *ank=0;
 	do	{ //sf := current string end
 		int sf = DEAD+A[k]-*depth;
 		int **lim = jak+(sf>>JALOG);
@@ -199,7 +199,7 @@ static int jtandem(int *A, int *B, int *x, int num, int depth)	{
 	#ifdef USE_FWAN
 	int per = B-A, mid = per-num; //excluded
 	/*DO: charging */	{
-		static int charge = 0, *emid = NULL;
+		static int charge = 0, *emid = 0;
 		if(emid<A || emid>=B)	{
 			charge = 0; emid = A+(per>>1);
 		}
@@ -221,7 +221,7 @@ static int jtandem(int *A, int *B, int *x, int num, int depth)	{
 }
 
 static int borders(int *A, int *B, int depth)	{
-	static int *emin = NULL;
+	static int *emin = 0;
 	if(emin<A || emin>=B)	{ emin = --B;
 		while(B != A) if(*--B<*emin) emin=B;
 	}
