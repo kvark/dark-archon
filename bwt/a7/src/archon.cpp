@@ -25,8 +25,8 @@ class	Sais	{
 		bits[i>>3] |= 1<<(i&7);
 	}
 	bool isElbow(const int i) const	{
-		if(i<=0) return false;
-		const dword dx = *(dword*)( bits+((i-1)>>3) ) >> ((i-1)&0x7U);
+		assert(i>=0);
+		const dword dx = *(dword*)( bits+(i>>3) ) >> (i&0x7U);
 		return (dx & 3) == 1;	//has to be 10b
 	}
 
@@ -41,6 +41,9 @@ class	Sais	{
 			}else
 				prev = cur;
 		}
+		// make sure the reversed string
+		// does not start with LMS
+		setLimit(N);
 	}
 
 	void buckets()	{
@@ -60,65 +63,65 @@ class	Sais	{
 	template<int OFF>
 	void induce()	{
 		buckets();
-		for(int i=0; i<N; ++i)	{
-			const suffix j = P[i];
+		for(int i=0; i<=N; ++i)	{
+			const suffix j = P[ OFF ? (N-i) : i ];
 			if(j>=0 && j<N && isLimit(j)==OFF)
-				P[advance<OFF>(data[j])] = j;
+				P[advance<OFF>(data[j])] = j+1;
 		}
 	}
 
 	void reduce()	{
 		int i;
 		memset( P, -1, N*sizeof(suffix) );
+		P[N] = 0;
 		// scatter LMS into bucket positions
 		buckets();
-		for(i=0; i<N; ++i)	{
+		for(i=N; --i>=0; )	{
 			if(isElbow(i))
-				P[--RE[data[i]]] = i;
+				P[--RE[data[i]]] = i+1;
 		}
-		// induce uncertain positions of all other strings
-		//note: this seems to be unnecessary
+		// sort by induction (evil technology!)
 		induce<0>();
 		induce<1>();
 		// pack LMS into the first n1 suffixes
 		for(n1=i=0; i<N; ++i)	{
 			const suffix pos = P[i];
-			assert( pos>=0 );
-			if(isElbow(pos))
+			assert(pos>=0);
+			if(isElbow(pos-1))
 				P[n1++] = pos;
 		}
+		assert(n1+n1<=N);
 		// compare LMS substrings char by char
 		// with LMS signs as delimeters
 		// to define the first set of values
 		// and write them into [n1,2*n1)
 		memset( P+n1, -1, (N-n1)*sizeof(suffix) );
-		int prev=-1;
-		name = 0;
-		for(i=0; i<n1; ++i)	{
-			suffix pos = P[i];
-			bool diff = false;
-			// apparently, we compare the next LMS substring with the previous one
-			for(int d=0; d<N; ++d)	{
+		int prev = -1;
+		for(name=0,i=0; i<n1; ++i)	{
+			const suffix pos = P[i];
+			// we compare the next LMS substring with the previous one
+			for(int d=1; d<=N; ++d)	{
+				assert(prev<0 || data[pos-d] >= data[prev-d]);
 				if(prev<0 || data[pos-d]!=data[prev-d] || isLimit(pos-d) != isLimit(prev-d))	{
-					diff = true; break;
-				}else if(d>0 && (isElbow(pos-d) || isElbow(prev-d)))
+					// this one is different - remember it
+					++name; prev=pos; break;
+				}else if(d>1 && (isElbow(pos-d) || isElbow(prev-d)))
 					break;
 			}
-			if(diff) {
-				// this one is different - remember it
-				++name; prev=pos;
-			}
 			// write somewhere in the accessible area
-			// it's guraranteed that no two LMS are together
+			// it's guaranteed that no two LMS are together
 			// therefore we can divide the index by two here
-			P[n1+(pos>>1)] = name-1;	
+			const int id = n1+(pos>>1);
+			assert(id<N);
+			P[id] = name-1;
 		}
 		// pack values into the last n1 suffixes
 		int j;
-		for(i=j=N-1; i>=n1; --i)		{
+		for(i=j=N; --i>=n1; )		{
 			if(P[i]>=0)
 				P[--j]=P[i];
 		}
+		assert(j+n1 == N);
 	}
 
 	void solve()	{
@@ -138,8 +141,11 @@ class	Sais	{
 		int i,j;
 		// get the list of LMS strings
 		// LMS number -> actual string number
-		for(i=1,j=0; i<N; ++i)	{
-			if(isElbow(i)) s1[j++] = i;
+		for(i=N,j=0; --i>=0; )	{
+			if(isElbow(i))	{
+				assert( n1+j<N );
+				s1[j++] = i+1;
+			}
 		}
 		// update the indices in the sorted array
 		// LMS index -> string index
@@ -148,9 +154,12 @@ class	Sais	{
 		// scatter LMS back into proper positions
 		buckets();
 		memset( P+n1, -1, (N-n1)*sizeof(suffix) );
-		for(i=n1-1; i>=0; --i)	{
+		for(i=n1; --i>=0; )	{
 			j = P[i]; P[i] = -1;
-			P[--RE[data[j]]] = j;
+			assert(j>0 && j<=N);
+			int *const pr = RE+data[j-1];
+			P[--*pr] = j;
+			assert(*pr >= 0);
 		}
 		// induce the rest of suffixes
 		induce<0>();
@@ -201,5 +210,15 @@ int Archon::compute()	{
 }
 
 int Archon::write(FILE *const fx)	{
+	int base_id = -1;
+	for(int i=0; i!=N; ++i)	{
+		suffix pos = P[i];
+		if(pos == N)	{
+			base_id = i;
+			pos = 0;
+		}
+		fputc( str[sTermin+pos], fx);
+	}
+	fwrite( &base_id, sizeof(int), 1, fx);
 	return 0;
 }
