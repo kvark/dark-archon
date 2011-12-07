@@ -1,6 +1,8 @@
-COMPILE=gcc -Wall -std=c99 -g3 -m32
+CXX		=g++
+CXXFLAGS	=-Wall -g3 -m32
+LDLIBS		=-lstdc++
 
 all:	main
 
 main:
-	${COMPILE} -o bin/main src/main.cpp src/archon.cpp
+	${CXX} -o bin/main src/main.cpp src/archon.cpp

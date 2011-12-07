@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "common.h"
 #include "archon.h"
 
 static const char sUsage[] = "Usage: archon [e|d] <in> <out>\n";
