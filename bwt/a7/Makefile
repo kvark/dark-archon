@@ -1,8 +1,12 @@
 CXX		=g++
-CXXFLAGS	=-Wall -g3 -m32
+CXXFLAGS	=-Wall -m32
 LDLIBS		=-lstdc++
+FILES		=src/main.cpp src/archon.cpp
 
-all:	main
+all:	main main_d
 
 main:
-	${CXX} -o bin/main src/main.cpp src/archon.cpp
+	${CXX} -o bin/main ${FILES} -O2 -fomit-frame-pointer -DNDEBUG
+
+main_d:
+	${CXX} -o bin/main_d ${FILES} -g3
