@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include "archon.h"
 
@@ -7,7 +8,7 @@ static const char sUsage[] = "Usage: archon [e|d] <in> <out>\n";
 
 
 int main(const int argc, const char *const argv[])	{
-	FILE *fx; bool mode;
+	FILE *fx; bool mode; time_t t0;
 	printf("Archon-7 prototype\n");
 	if(argc != 4)	{
 		printf(sUsage);
@@ -31,24 +32,26 @@ int main(const int argc, const char *const argv[])	{
 		ar.en_read(fx,N);
 		fclose(fx);
 		printf("Encoding SA...\n");
+		t0 = clock();
 		ar.en_compute();
+		t0 = clock()-t0;
 		printf("Writing BWT...\n");
 		fx = fopen(argv[3],"wb");
 		if(!fx)
 			return -3;
-		//fwrite( &N, sizeof(int), 1, fx );
 		ar.en_write(fx);
 	}else	{
 		N -= sizeof(int);
 		if(N<=0)
 			return -2;
-		//fread( &N, sizeof(int), 1, fx );
 		Archon ar(N);
 		printf("Reading BWT...\n");
 		ar.de_read(fx,N);
 		fclose(fx);
 		printf("Decoding SA...\n");
+		t0 = clock();
 		ar.de_compute();
+		t0 = clock()-t0;
 		printf("Writing raw...\n");
 		fx = fopen(argv[3],"wb");
 		if(!fx)
@@ -56,6 +59,7 @@ int main(const int argc, const char *const argv[])	{
 		ar.de_write(fx);
 	}
 	fclose(fx);
+	printf("SA time: %.2f sec\n", t0*1.f/CLOCKS_PER_SEC);
 	printf("Done.\n");
 	return 0;
 }
