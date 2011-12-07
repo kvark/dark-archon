@@ -192,6 +192,7 @@ public:
 
 //--------------------------------------------------------//
 
+//	INITIALIZATION	//
 
 static const int sTermin = 10;
 
@@ -200,7 +201,7 @@ Archon::Archon(const int Nx)
 , R(new int[((Nx>>9) ? (Nx>>1) : 256)+1])
 , str(new byte[sTermin+Nx+1])
 , bitMask(new byte[(Nx>>2)+4])
-, N(-1), Nmax(Nx) {
+, Nmax(Nx), N(-1), baseId(-1) {
 	assert(P && R && str && bitMask);
 }
 
@@ -211,27 +212,69 @@ Archon::~Archon()	{
 	delete[] bitMask;
 }
 
-int Archon::read(FILE *const fx)	{
-	byte *const input = str + sTermin;
-	N = fread(input,1,Nmax,fx);
+
+//	ENCODING	//
+
+int Archon::en_read(FILE *const fx, int ns)	{
+	assert(ns>=0 && ns<=Nmax);
+	N = fread( str+sTermin, 1, ns, fx );
 	return N;
 }
 
-int Archon::compute()	{
+int Archon::en_compute()	{
 	Sais<byte>( str+sTermin, P, bitMask, N, R, 256 );
 	return 0;
 }
 
-int Archon::write(FILE *const fx)	{
-	int base_id = -1;
+int Archon::en_write(FILE *const fx)	{
+	baseId = -1;
 	for(int i=0; i!=N; ++i)	{
 		suffix pos = P[i];
 		if(pos == N)	{
-			base_id = i;
+			baseId = i;
 			pos = 0;
 		}
 		fputc( str[sTermin+pos], fx);
 	}
-	fwrite( &base_id, sizeof(int), 1, fx);
+	fwrite( &baseId, sizeof(int), 1, fx);
+	return 0;
+}
+
+
+//	DECODING	//
+
+void Archon::roll(const int i)	{
+	P[i] = R[str[i]]++;
+	assert(N==1 || i != P[i]);
+}
+
+int Archon::de_read(FILE *const fx, int ns)	{
+	assert(ns>=0 && ns<=Nmax);
+	N = fread( str, 1, ns, fx );
+	int ok = fread( &baseId, sizeof(int), 1, fx );
+	assert(ok && baseId>=0 && baseId<N);
+	return N;
+}
+
+int Archon::de_compute()	{
+	int i,k;
+	const byte *const data = str+sTermin;
+	memset( R, 0, 0x100*sizeof(int) );
+	memset( P, -1, (N+1)*sizeof(int) );		//for debug
+	for(i=0; i!=N; ++i)
+		R[str[i]] += 1;
+	for(k=N,i=0x100; i--;)	{
+		R[i] = (k-=R[i]);
+	}
+	for(i=0; i<baseId; i++)		roll(i);
+	for(i=baseId+1; i<N; i++)	roll(i);
+	roll(baseId);
+	return 0;
+}
+
+int Archon::de_write(FILE *const fx)	{
+	int i,k;
+	for(i=0,k=baseId; i!=N; ++i,k=P[k])
+		putc(str[k],fx);
 	return 0;
 }
