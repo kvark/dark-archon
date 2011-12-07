@@ -3,6 +3,7 @@ syntax: glob
 bin
 obj
 data
+profile
 files
 msvc*
 bugs
