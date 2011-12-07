@@ -9,9 +9,9 @@
 
 //--------------------------------------------------------//
 
-template<int OFF>	int advance(int *const);
-template<>	int advance<0>(int *const pr)	{ return pr[0]++;	}
-template<>	int advance<1>(int *const pr)	{ return --pr[1];	}
+template<int OFF>	unsigned advance(unsigned *const);
+template<>	unsigned advance<0>(unsigned *const pr)	{ return pr[0]++;	}
+template<>	unsigned advance<1>(unsigned *const pr)	{ return --pr[1];	}
 
 
 template<typename T>
@@ -19,19 +19,19 @@ class	Sais	{
 	T *const data;
 	suffix *const P;
 	byte *const bits;
-	int *const R, *const RE;
-	const int N,K;
-	int n1,name;
+	unsigned *const R, *const RE;
+	const unsigned N,K;
+	unsigned n1,name;
 
 	
-	byte isUp(const int i) const	{
+	byte isUp(const unsigned i) const	{
 		return (bits[i>>3] >> (i&7)) & 1;
 	}
-	void setUp(const int i)	{
+	void setUp(const unsigned i)	{
 		bits[i>>3] |= 1<<(i&7);
 	}
-	bool isElbow(const int i) const	{
-		assert(i>=0);
+	bool isElbow(const unsigned i) const	{
+		assert(i<=N);
 		const dword dx = *(dword*)( bits+(i>>3) ) >> (i&0x7U);
 		return (dx & 3) == 1;	// has to be 10b
 	}
@@ -41,9 +41,9 @@ class	Sais	{
 	void classify()	{
 		checkData();
 		memset( bits, 0, (N>>3)+1 );
-		int prev = data[0]+1;
+		unsigned prev = data[0]+1;
 		for(int i=0; i!=N; ++i)	{
-			const int cur = data[i];
+			const unsigned cur = data[i];
 			if(prev > cur)	{
 				setUp(i);
 				prev = cur+1;
@@ -56,8 +56,8 @@ class	Sais	{
 	}
 
 	void buckets()	{
-		memset( R, 0, K*sizeof(int) );
-		int i,sum;
+		memset( R, 0, K*sizeof(unsigned) );
+		unsigned i,sum;
 		for(i=0; i<N; ++i)	{
 			R[data[i]] += 1;
 		}
@@ -70,20 +70,20 @@ class	Sais	{
 	template<int OFF>
 	void induce()	{
 		buckets();
-		for(int i=0; i<=N; ++i)	{
+		for(unsigned i=0; i<=N; ++i)	{
 			const suffix j = P[ OFF ? (N-i) : i ];
-			if(j>=0 && j<N && isUp(j)==OFF)
+			if(j<N && isUp(j)==OFF)
 				P[advance<OFF>(R+data[j])] = j+1;
 		}
 	}
 
 	void reduce()	{
-		int i;
-		memset( P, -1, N*sizeof(suffix) );
+		unsigned i;
+		memset( P, 0, N*sizeof(suffix) );
 		P[N] = 0;
 		// scatter LMS into bucket positions
 		buckets();
-		for(i=N; --i>=0; )	{
+		for(i=N; i--; )	{
 			if(isElbow(i))
 				P[--RE[data[i]]] = i+1;
 		}
@@ -93,7 +93,7 @@ class	Sais	{
 		// pack LMS into the first n1 suffixes
 		for(n1=i=0; i<N; ++i)	{
 			const suffix pos = P[i];
-			assert(pos>=0);
+			assert(pos>0);
 			if(isElbow(pos-1))
 				P[n1++] = pos;
 		}
@@ -102,12 +102,12 @@ class	Sais	{
 		// with LMS signs as delimeters
 		// to define the first set of values
 		// and write them into [n1,2*n1)
-		memset( P+n1, -1, (N-n1)*sizeof(suffix) );
+		memset( P+n1, 0, (N-n1)*sizeof(suffix) );
 		suffix prev = 0;
 		for(name=0,i=0; i<n1; ++i)	{
 			const suffix pos = P[i];
 			// we compare the next LMS substring with the previous one
-			for(int d=1; d<=N; ++d)	{
+			for(unsigned d=1; d<=N; ++d)	{
 				assert(!prev || pos<d || data[pos-d] >= data[prev-d]);
 				if(!prev || pos<d || data[pos-d]!=data[prev-d] || isUp(pos-d) != isUp(prev-d))	{
 					// this one is different - remember it
@@ -124,15 +124,15 @@ class	Sais	{
 			// write somewhere in the accessible area
 			// it's guaranteed that no two LMS are together
 			// therefore we can divide the index by two here
-			const int id = n1+(pos>>1);
+			const unsigned id = n1+(pos>>1);
 			assert(id<N);
-			P[id] = name-1;
+			P[id] = name;
 		}
 		// pack values into the last n1 suffixes
-		int j;
-		for(i=N,j=N; --i>=n1; )		{
-			if(P[i]>=0)
-				P[--j]=P[i];
+		unsigned j;
+		for(i=N,j=N; i--!=n1; )		{
+			if(P[i])
+				P[--j] = P[i]-1;
 		}
 		assert(j>0 && j+n1 == N);
 		P[j-1] = name;	// terminator!
@@ -145,14 +145,14 @@ class	Sais	{
 		}else	{
 			// permute back from values into indices
 			assert(name == n1);
-			for(int i=0; i<n1; ++i)
+			for(unsigned i=0; i<n1; ++i)
 				P[s1[i]] = i+1;
 		}
 	}
 
 	void goback()	{
 		suffix *const s1 = P+N-n1;
-		int i,j;
+		unsigned i,j;
 		// get the list of LMS strings
 		// LMS number -> actual string number
 		//note: going left to right here!
@@ -177,13 +177,13 @@ class	Sais	{
 		}
 		// scatter LMS back into proper positions
 		buckets();
-		memset( P+n1, -1, (N-n1)*sizeof(suffix) );
+		memset( P+n1, 0, (N-n1)*sizeof(suffix) );
 		T prev_sym = K-1;
-		for(i=n1; --i>=0; )	{
-			j = P[i]; P[i] = -1;
+		for(i=n1; i--; )	{
+			j = P[i]; P[i] = 0;
 			assert(j>0 && j<=N				&& "Invalid suffix!");
 			assert(data[j-1] <= prev_sym		&& "Not sorted!");
-			int *const pr = RE+data[j-1];
+			unsigned *const pr = RE+data[j-1];
 			P[--*pr] = j;
 			assert(pr[0] >= pr[-1]	&& "Stepped twice on the same suffix!");
 			assert(pr[0] >= i		&& "Not sorted properly!");
@@ -194,8 +194,8 @@ class	Sais	{
 	}
 
 public:
-	Sais(T *const _data, suffix *const _P, byte *const _bits, const int _N, int *const _R, const int _K)
-	: data(_data), P(_P), bits(_bits), N(_N), R(_R), RE(_R+1), K(_K), n1(-1), name(-1)	{
+	Sais(T *const _data, suffix *const _P, byte *const _bits, const unsigned _N, unsigned *const _R, const unsigned _K)
+	: data(_data), P(_P), bits(_bits), N(_N), R(_R), RE(_R+1), K(_K), n1(0), name(0)	{
 		classify();
 		reduce();
 		solve();
@@ -207,7 +207,7 @@ template<>	void Sais<byte>::checkData()	{
 	assert(K==0x100);
 }
 template<>	void Sais<suffix>::checkData()	{
-	for(int i=0; i<N; ++i)
+	for(unsigned i=0; i<N; ++i)
 		assert(data[i]>=0 && data[i]<K);
 }
 
@@ -216,12 +216,12 @@ template<>	void Sais<suffix>::checkData()	{
 
 //	INITIALIZATION	//
 
-Archon::Archon(const int Nx)
+Archon::Archon(const unsigned Nx)
 : P(new suffix[Nx+1])
-, R(new int[((Nx>>9) ? (Nx>>1) : 256)+1])
+, R(new unsigned[((Nx>>9) ? (Nx>>1) : 256)+1])
 , str(new byte[Nx+1])
 , bitMask(new byte[(Nx>>2)+4])
-, Nmax(Nx), N(-1), baseId(-1) {
+, Nmax(Nx), N(0), baseId(0) {
 	assert(P && R && str && bitMask);
 }
 
@@ -235,7 +235,7 @@ Archon::~Archon()	{
 
 //	ENCODING	//
 
-int Archon::en_read(FILE *const fx, int ns)	{
+int Archon::en_read(FILE *const fx, unsigned ns)	{
 	assert(ns>=0 && ns<=Nmax);
 	N = fread( str, 1, ns, fx );
 	return N;
@@ -247,8 +247,8 @@ int Archon::en_compute()	{
 }
 
 int Archon::en_write(FILE *const fx)	{
-	baseId = -1;
-	for(int i=0; i!=N; ++i)	{
+	baseId = N;
+	for(unsigned i=0; i!=N; ++i)	{
 		suffix pos = P[i];
 		if(pos == N)	{
 			baseId = i;
@@ -256,29 +256,30 @@ int Archon::en_write(FILE *const fx)	{
 		}
 		fputc( str[pos], fx);
 	}
-	fwrite( &baseId, sizeof(int), 1, fx);
+	assert(baseId != N);
+	fwrite( &baseId, sizeof(unsigned), 1, fx);
 	return 0;
 }
 
 
 //	DECODING	//
 
-void Archon::roll(const int i)	{
+void Archon::roll(const unsigned i)	{
 	P[i] = R[str[i]]++;
 	assert(N==1 || i != P[i]);
 }
 
-int Archon::de_read(FILE *const fx, int ns)	{
+int Archon::de_read(FILE *const fx, unsigned ns)	{
 	en_read(fx,ns);
-	int ok = fread( &baseId, sizeof(int), 1, fx );
-	assert(ok && baseId>=0 && baseId<N);
+	int ok = fread( &baseId, sizeof(unsigned), 1, fx );
+	assert(ok && baseId<N);
 	return N;
 }
 
 int Archon::de_compute()	{
-	int i,k;
-	memset( R, 0, 0x100*sizeof(int) );
-	memset( P, -1, (N+1)*sizeof(int) );		// for debug
+	unsigned i,k;
+	memset( R, 0, 0x100*sizeof(unsigned) );
+	memset( P, 0, (N+1)*sizeof(unsigned) );		// for debug
 	for(i=0; i!=N; ++i)
 		R[str[i]] += 1;
 	for(k=N,i=0x100; i--;)
@@ -290,8 +291,8 @@ int Archon::de_compute()	{
 }
 
 int Archon::de_write(FILE *const fx)	{
-	int i,k;
-	for(i=0,k=baseId; i!=N; ++i,k=P[k])
+	unsigned i, k=baseId;
+	for(i=0; i!=N; ++i,k=P[k])
 		putc(str[k],fx);
 	assert( k==baseId );
 	return 0;
