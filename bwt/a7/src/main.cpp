@@ -30,7 +30,7 @@ int main(const int argc, const char *const argv[])	{
 		printf("Reading raw...\n");
 		ar.en_read(fx,N);
 		fclose(fx);
-		printf("Encoding BWT...\n");
+		printf("Encoding SA...\n");
 		ar.en_compute();
 		printf("Writing BWT...\n");
 		fx = fopen(argv[3],"wb");
@@ -47,7 +47,7 @@ int main(const int argc, const char *const argv[])	{
 		printf("Reading BWT...\n");
 		ar.de_read(fx,N);
 		fclose(fx);
-		printf("Decoding BWT...\n");
+		printf("Decoding SA...\n");
 		ar.de_compute();
 		printf("Writing raw...\n");
 		fx = fopen(argv[3],"wb");
