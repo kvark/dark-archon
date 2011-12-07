@@ -41,6 +41,7 @@ class	Sais	{
 	void classify()	{
 		checkData();
 		memset( bits, 0, (N>>3)+1 );
+		//todo: find the number of LMS here
 		unsigned prev = data[0]+1;
 		for(int i=0; i!=N; ++i)	{
 			const unsigned cur = data[i];
@@ -58,17 +59,17 @@ class	Sais	{
 	void buckets()	{
 		memset( R, 0, K*sizeof(unsigned) );
 		unsigned i,sum;
-		for(i=0; i<N; ++i)	{
-			R[data[i]] += 1;
-		}
-		for(R[i=K]=sum=N; i--;)	{
+		for(i=0; i<N; ++i)
+			++R[data[i]];
+		for(R[i=K]=sum=N; i--;)
 			R[i] = (sum -= R[i]);
-		}
 		assert(!sum);
 	}
 
 	template<int OFF>
 	void induce()	{
+		// LMS induction can be implemented without looking into the bit array
+		//todo: remove usage of the bit array, at least for some scenarios
 		buckets();
 		for(unsigned i=0; i<=N; ++i)	{
 			const suffix j = P[ OFF ? (N-i) : i ];
@@ -78,47 +79,62 @@ class	Sais	{
 	}
 
 	void reduce()	{
-		unsigned i;
+		unsigned i,j;
 		memset( P, 0, N*sizeof(suffix) );
 		P[N] = 0;
 		// scatter LMS into bucket positions
 		buckets();
-		for(i=N; i--; )	{
-			if(isElbow(i))
+		for(n1=0,i=N; i--; )	{
+			//todo: use LMS count to terminate the loop
+			if(isElbow(i))	{
+				//todo: don't use the bit array here
 				P[--RE[data[i]]] = i+1;
+				++n1;
+			}
 		}
+		assert(n1+n1<=N);
 		// sort by induction (evil technology!)
 		induce<0>();
 		induce<1>();
 		// pack LMS into the first n1 suffixes
-		for(n1=i=0; i<N; ++i)	{
+		for(j=i=0; ;++i)	{
 			const suffix pos = P[i];
 			assert(pos>0);
-			if(isElbow(pos-1))
-				P[n1++] = pos;
+			if(isElbow(pos-1))	{
+				//todo: pack this bit into P[i]
+				P[j] = pos;
+				if(++j == n1)
+					break;
+			}
 		}
-		assert(n1+n1<=N);
 		// compare LMS substrings char by char
 		// with LMS signs as delimeters
 		// to define the first set of values
 		// and write them into [n1,2*n1)
 		memset( P+n1, 0, (N-n1)*sizeof(suffix) );
-		suffix prev = 0;
-		for(name=0,i=0; i<n1; ++i)	{
+		suffix prev = P[0];
+		P[n1+(prev>>1)] = name = 1;
+		for(i=1; i<n1; ++i)	{
 			const suffix pos = P[i];
-			// we compare the next LMS substring with the previous one
-			for(unsigned d=1; d<=N; ++d)	{
-				assert(!prev || pos<d || data[pos-d] >= data[prev-d]);
-				if(!prev || pos<d || data[pos-d]!=data[prev-d] || isUp(pos-d) != isUp(prev-d))	{
-					// this one is different - remember it
-					//todo: keep group information here to accelerate farther sorting
-					assert(pos>=d || (pos==d-1 && prev>pos));
-					++name; prev=pos; break;
-				}else	{
-					assert( d<=pos && d<=prev );
-					assert( d!=1 || (isElbow(pos-d) && isElbow(prev-d)) );
-					if(d>1 && (isElbow(pos-d) || isElbow(prev-d)))
-						break;
+			// pos=1 always presents, no sense to compare it
+			if(pos!=1)	{
+				assert(pos>1 && pos<=N);
+				// we compare the next LMS substring with the previous one
+				for(unsigned d=1; d<=N; ++d)	{
+					assert(data[pos-d] >= data[prev-d]);
+					if(data[pos-d]!=data[prev-d])	{
+						// this one is different - remember it
+						//todo: keep group information here to accelerate farther sorting
+						assert(pos>=d || (pos==d-1 && prev>pos));
+						++name; prev=pos; break;
+					}else	{
+						//todo: pre-compute LMS lengths and use them instead of
+						// checking for the LMS bornder on each iteration
+						assert( d<=pos && d<=prev );
+						assert( d!=1 || (isElbow(pos-d) && isElbow(prev-d)) );
+						if(d>1 && (isElbow(pos-d) || isElbow(prev-d)))
+							break;
+					}
 				}
 			}
 			// write somewhere in the accessible area
@@ -129,13 +145,14 @@ class	Sais	{
 			P[id] = name;
 		}
 		// pack values into the last n1 suffixes
-		unsigned j;
-		for(i=N,j=N; i--!=n1; )		{
-			if(P[i])
+		for(i=N,j=N; ;)		{
+			assert( i>n1 );
+			if(P[--i])	{
 				P[--j] = P[i]-1;
+				if(j == N-n1)
+					break;
+			}
 		}
-		assert(j>0 && j+n1 == N);
-		P[j-1] = name;	// terminator!
 	}
 
 	void solve()	{
@@ -160,8 +177,7 @@ class	Sais	{
 			//note: this is the only place after recursion
 			// where we need the bit array
 			// moreover, we use it in a sequential order
-			//todo: don't use bit array here,
-			// reducing the memory requirements by N/4
+			//todo: don't use bit array here
 			if(isElbow(i))	{
 				assert( n1+j<N );
 				s1[j++] = i+1;
