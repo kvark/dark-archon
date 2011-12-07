@@ -8,14 +8,19 @@ class Archon	{
 	int	*const R;
 	byte *const str;
 	byte *const bitMask;
-	int N;
+	const int Nmax;
+	int N, baseId;
+	void roll(const int i);
 
 public:
-	const int Nmax;
-	
 	Archon(const int N);
 	~Archon();
-	int read(FILE *const fx);
-	int compute();
-	int write(FILE *const fx);
+	// encoding
+	int en_read(FILE *const fx, int ns);
+	int en_compute();
+	int en_write(FILE *const fx);
+	// decoding
+	int de_read(FILE *const fx, int ns);
+	int de_compute();
+	int de_write(FILE *const fx);
 };
