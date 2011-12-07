@@ -2,11 +2,15 @@
 #include <memory.h>
 #include <stdio.h>
 
-#include "common.h"
 #include "archon.h"
 
 
 //--------------------------------------------------------//
+
+template<int OFF>	int advance(int *const);
+template<>	int advance<0>(int *const pr)	{ return pr[0]++;	}
+template<>	int advance<1>(int *const pr)	{ return --pr[1];	}
+
 
 template<typename T>
 class	Sais	{
@@ -50,7 +54,7 @@ class	Sais	{
 		memset( R, 0, K*sizeof(int) );
 		int i,sum;
 		for(i=0; i<N; ++i)	{
-			assert(data[i]>=0 && data[i]<K);
+			//assert(data[i]>=0 && data[i]<K);
 			R[data[i]] += 1;
 		}
 		for(R[i=K]=sum=N; i--;)	{
@@ -59,17 +63,13 @@ class	Sais	{
 		assert(!sum);
 	}
 
-	template<int OFF>	int advance(const T);
-	template<>	int advance<0>(const T x)	{ return R[x]++;	}
-	template<>	int advance<1>(const T x)	{ return --RE[x];	}
-
 	template<int OFF>
 	void induce()	{
 		buckets();
 		for(int i=0; i<=N; ++i)	{
 			const suffix j = P[ OFF ? (N-i) : i ];
 			if(j>=0 && j<N && isUp(j)==OFF)
-				P[advance<OFF>(data[j])] = j+1;
+				P[advance<OFF>(R+data[j])] = j+1;
 		}
 	}
 
