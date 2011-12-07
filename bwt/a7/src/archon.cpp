@@ -18,10 +18,10 @@ class	Sais	{
 	int n1,name;
 
 	
-	byte isLimit(const int i) const	{
+	byte isUp(const int i) const	{
 		return (bits[i>>3] >> (i&7)) & 1;
 	}
-	void setLimit(const int i)	{
+	void setUp(const int i)	{
 		bits[i>>3] |= 1<<(i&7);
 	}
 	bool isElbow(const int i) const	{
@@ -36,24 +36,27 @@ class	Sais	{
 		for(int i=0; i!=N; ++i)	{
 			const int cur = data[i];
 			if(prev > cur)	{
-				setLimit(i);
+				setUp(i);
 				prev = cur+1;
 			}else
 				prev = cur;
 		}
 		// make sure the reversed string
 		// does not start with LMS
-		setLimit(N);
+		setUp(N);
 	}
 
 	void buckets()	{
 		memset( R, 0, K*sizeof(int) );
 		int i,sum;
-		for(i=0; i<N; ++i)
+		for(i=0; i<N; ++i)	{
+			assert(data[i]>=0 && data[i]<K);
 			R[data[i]] += 1;
+		}
 		for(R[i=K]=sum=N; i--;)	{
 			R[i] = (sum -= R[i]);
 		}
+		assert(!sum);
 	}
 
 	template<int OFF>	int advance(const T);
@@ -65,7 +68,7 @@ class	Sais	{
 		buckets();
 		for(int i=0; i<=N; ++i)	{
 			const suffix j = P[ OFF ? (N-i) : i ];
-			if(j>=0 && j<N && isLimit(j)==OFF)
+			if(j>=0 && j<N && isUp(j)==OFF)
 				P[advance<OFF>(data[j])] = j+1;
 		}
 	}
@@ -102,8 +105,9 @@ class	Sais	{
 			// we compare the next LMS substring with the previous one
 			for(int d=1; d<=N; ++d)	{
 				assert(prev<0 || data[pos-d] >= data[prev-d]);
-				if(prev<0 || data[pos-d]!=data[prev-d] || isLimit(pos-d) != isLimit(prev-d))	{
+				if(prev<0 || data[pos-d]!=data[prev-d] || isUp(pos-d) != isUp(prev-d))	{
 					// this one is different - remember it
+					//TODO: keep group information here to accelerate farther sorting
 					++name; prev=pos; break;
 				}else if(d>1 && (isElbow(pos-d) || isElbow(prev-d)))
 					break;
@@ -127,12 +131,12 @@ class	Sais	{
 	void solve()	{
 		suffix *const s1 = P+N-n1;
 		if(name<n1)	{
-			Sais<suffix>( s1, P, bits, n1, R, name );
+			Sais<suffix>( s1, P, bits+(N>>3)+1, n1, R, name );
 		}else	{
 			// permute back from values into indices
 			assert(name == n1);
 			for(int i=0; i<n1; ++i)
-				P[s1[i]] = i;
+				P[s1[i]] = i+1;
 		}
 	}
 
@@ -141,25 +145,34 @@ class	Sais	{
 		int i,j;
 		// get the list of LMS strings
 		// LMS number -> actual string number
-		for(i=N,j=0; --i>=0; )	{
+		//note: going left to right here!
+		for(i=0,j=0; i<N; ++i)	{
 			if(isElbow(i))	{
 				assert( n1+j<N );
 				s1[j++] = i+1;
 			}
 		}
+		assert(j==n1);
 		// update the indices in the sorted array
 		// LMS index -> string index
-		for(i=0; i<n1; ++i)
-			P[i] = s1[P[i]];
+		for(i=0; i<n1; ++i)	{
+			j = P[i];
+			assert(j>0 && j<=n1);
+			P[i] = s1[j-1];
+		}
 		// scatter LMS back into proper positions
 		buckets();
 		memset( P+n1, -1, (N-n1)*sizeof(suffix) );
+		T prev_sym = K-1;
 		for(i=n1; --i>=0; )	{
 			j = P[i]; P[i] = -1;
-			assert(j>0 && j<=N);
+			assert(j>0 && j<=N				&& "Invalid suffix!");
+			assert(data[j-1] <= prev_sym		&& "Not sorted!");
 			int *const pr = RE+data[j-1];
-			P[--*pr] = j;
-			assert(*pr >= 0);
+			suffix *const s = P + --*pr;
+			assert(pr[0] >= pr[-1]	&& "Stepped twice on the same suffix!");
+			assert(pr[0] >= i		&& "Not sorted properly!");
+			*s = j;
 		}
 		// induce the rest of suffixes
 		induce<0>();
@@ -168,7 +181,7 @@ class	Sais	{
 
 public:
 	Sais(T *const _data, suffix *const _P, byte *const _bits, const int _N, int *const _R, const int _K)
-	: data(_data), P(_P), bits(_bits), N(_N), R(_R), RE(_R+1), K(_K)	{
+	: data(_data), P(_P), bits(_bits), N(_N), R(_R), RE(_R+1), K(_K), n1(-1), name(-1)	{
 		classify();
 		reduce();
 		solve();
@@ -186,9 +199,9 @@ Archon::Archon(const int Nx)
 : P(new suffix[Nx+1])
 , R(new int[((Nx>>9) ? (Nx>>1) : 256)+1])
 , str(new byte[sTermin+Nx+1])
-, bitMask(new byte[(Nx>>3)+4])
+, bitMask(new byte[(Nx>>2)+4])
 , N(-1), Nmax(Nx) {
-	//empty
+	assert(P && R && str && bitMask);
 }
 
 Archon::~Archon()	{
