@@ -66,7 +66,8 @@ class	SaIs	{
 		buckets();
 		for(i=0; i!=N; ++i)	{
 			const suffix j = P[i];
-			if((j-1U) >= NL) continue;
+			if((j-1U) >= NL)
+				continue;
 			const T cur = data[j];
 			if(data[j-1] <= cur)
 				P[R[cur]++] = j+1;
@@ -76,11 +77,47 @@ class	SaIs	{
 		P[--RE[data[0]]] = 1;
 		i=N; do	{
 			const suffix j = P[--i];
-			if((j-1U) >= NL) continue;
+			if((j-1U) >= NL)
+				continue;
 			const T cur = data[j];
 			if(data[j-1] >= cur)
 				P[--RE[cur]] = j+1;
 		}while(i);
+	}
+
+	void valueLMS()	{
+		// using area of P[n1,N)
+		unsigned i,j;
+		// find the length of each LMS substring
+		// and write it into P[n1+(x>>1)]
+		// no collisions guaranteed because LMS distance>=2
+		for(i=0,j=0; ++i<N; )	{
+			if(data[i-1] >= data[i])	
+				continue;
+			P[n1 + (i>>1)] = i-j;	//length
+			j = i;
+			while(++i<N && data[i-1] <= data[i]);
+		}
+		// compare LMS using known lengths
+		unsigned prev_len = 0;
+		suffix prev = 0;
+		for(name=0,i=0; i!=n1; ++i)	{
+			const suffix cur = P[i];
+			unsigned &cur_len = P[n1+(cur>>1)];
+			assert(cur_len);
+			//todo: work around the jump
+			if(cur_len == prev_len)	{
+				j=1; do	{
+					if(data[cur-j] != data[prev-j])
+						goto greater;
+				}while(++j <= cur_len);
+			}else	{
+				greater:	//warning!
+				++name; prev = cur;
+				prev_len = cur_len;
+			}
+			cur_len = name;
+		}
 	}
 
 	void reduce()	{
@@ -111,43 +148,9 @@ class	SaIs	{
 					break;
 			}
 		}
-		// compare LMS substrings char by char
-		// with LMS signs as delimeters
-		// to define the first set of values
-		// and write them into [n1,2*n1)
+		// value LMS suffixes
 		memset( P+n1, 0, (N-n1)*sizeof(suffix) );
-		suffix prev = P[0];
-		P[n1+(prev>>1)] = name = 1;
-		for(i=1; i<n1; ++i)	{
-			const suffix pos = P[i];
-			// pos=1 always presents, no sense to compare it
-			if(pos!=1)	{
-				assert(pos>1 && pos<=N);
-				// we compare the next LMS substring with the previous one
-				for(unsigned d=1; d<=N; ++d)	{
-					assert(data[pos-d] >= data[prev-d]);
-					if(data[pos-d]!=data[prev-d])	{
-						// this one is different - remember it
-						//todo: keep group information here to accelerate farther sorting
-						assert(pos>=d || (pos==d-1 && prev>pos));
-						++name; prev=pos; break;
-					}else	{
-						//todo: pre-compute LMS lengths and use them instead of
-						// checking for the LMS bornder on each iteration
-						assert( d<=pos && d<=prev );
-						assert( d!=1 || (isElbow(pos-d) && isElbow(prev-d)) );
-						if(d>1 && (isElbow(pos-d) || isElbow(prev-d)))
-							break;
-					}
-				}
-			}
-			// write somewhere in the accessible area
-			// it's guaranteed that no two LMS are together
-			// therefore we can divide the index by two here
-			const unsigned id = n1+(pos>>1);
-			assert(id<N);
-			P[id] = name;
-		}
+		valueLMS();
 		// pack values into the last n1 suffixes
 		for(i=N,j=N; ;)		{
 			assert( i>n1 );
@@ -177,14 +180,12 @@ class	SaIs	{
 		// get the list of LMS strings
 		// LMS number -> actual string number
 		//note: going left to right here!
-		for(i=0,j=0; i+1<N; )	{
-			if(data[i] >= data[i+1])	{
-				++i; continue;
-			}
+		for(i=0,j=0; ++i<N; )	{
+			if(data[i-1] >= data[i])	
+				continue;
 			assert( n1+j<N );
-			s1[j++] = ++i;
-			while(i+1<N && data[i] <= data[i+1])
-				++i;
+			s1[j++] = i;
+			while(++i<N && data[i-1] <= data[i]);
 		}
 		assert(j==n1);
 		// update the indices in the sorted array
@@ -235,8 +236,8 @@ template<>	void SaIs<suffix>::checkData()	{
 //	INITIALIZATION	//
 
 Archon::Archon(const unsigned Nx)
-: P(new suffix[Nx+1])
-, R(new unsigned[((Nx>>9) ? (Nx>>1) : 256)+1])
+: P(new suffix[Nx+0x102])
+, R(new unsigned[((Nx>>9) ? (Nx>>1) : 0x100)+1])
 , str(new byte[Nx+1])
 , bitMask(new byte[(Nx>>3)+4])
 , Nmax(Nx), N(0), baseId(0) {
