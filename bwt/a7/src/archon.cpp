@@ -9,13 +9,8 @@
 
 //--------------------------------------------------------//
 
-template<int OFF>	unsigned advance(unsigned *const);
-template<>	unsigned advance<0>(unsigned *const pr)	{ return pr[0]++;	}
-template<>	unsigned advance<1>(unsigned *const pr)	{ return --pr[1];	}
-
-
 template<typename T>
-class	Sais	{
+class	SaIs	{
 	T *const data;
 	suffix *const P;
 	byte *const bits;
@@ -23,10 +18,6 @@ class	Sais	{
 	const unsigned N,K;
 	unsigned n1,name;
 
-	
-	byte isUp(const unsigned i) const	{
-		return (bits[i>>3] >> (i&7)) & 1;
-	}
 	void setUp(const unsigned i)	{
 		bits[i>>3] |= 1<<(i&7);
 	}
@@ -44,7 +35,7 @@ class	Sais	{
 		//todo: find the number of LMS here
 		unsigned prev = data[0]+1;
 		for(int i=0; i!=N; ++i)	{
-			const unsigned cur = data[i];
+			const unsigned& cur = data[i];
 			if(prev > cur)	{
 				setUp(i);
 				prev = cur+1;
@@ -66,16 +57,30 @@ class	Sais	{
 		assert(!sum);
 	}
 
-	template<int OFF>
 	void induce()	{
-		// LMS induction can be implemented without looking into the bit array
-		//todo: remove usage of the bit array, at least for some scenarios
+		const unsigned NL = N-1U;
+		// condition "(j-1U) >= NL" cuts off all 0-s and the N at once
+		unsigned i;
+		assert(N);
+		//left2right
 		buckets();
-		for(unsigned i=0; i<=N; ++i)	{
-			const suffix j = P[ OFF ? (N-i) : i ];
-			if(j<N && isUp(j)==OFF)
-				P[advance<OFF>(R+data[j])] = j+1;
+		for(i=0; i!=N; ++i)	{
+			const suffix j = P[i];
+			if((j-1U) >= NL) continue;
+			const T cur = data[j];
+			if(data[j-1] <= cur)
+				P[R[cur]++] = j+1;
 		}
+		//right2left
+		buckets();
+		P[--RE[data[0]]] = 1;
+		i=N; do	{
+			const suffix j = P[--i];
+			if((j-1U) >= NL) continue;
+			const T cur = data[j];
+			if(data[j-1] >= cur)
+				P[--RE[cur]] = j+1;
+		}while(i);
 	}
 
 	void reduce()	{
@@ -94,8 +99,7 @@ class	Sais	{
 		}
 		assert(n1+n1<=N);
 		// sort by induction (evil technology!)
-		induce<0>();
-		induce<1>();
+		induce();
 		// pack LMS into the first n1 suffixes
 		for(j=i=0; ;++i)	{
 			const suffix pos = P[i];
@@ -158,7 +162,7 @@ class	Sais	{
 	void solve()	{
 		suffix *const s1 = P+N-n1;
 		if(name<n1)	{
-			Sais<suffix>( s1, P, bits+(N>>3)+1, n1, R, name );
+			SaIs<suffix>( s1, P, bits+(N>>3)+1, n1, R, name );
 		}else	{
 			// permute back from values into indices
 			assert(name == n1);
@@ -205,12 +209,11 @@ class	Sais	{
 			assert(pr[0] >= i		&& "Not sorted properly!");
 		}
 		// induce the rest of suffixes
-		induce<0>();
-		induce<1>();
+		induce();
 	}
 
 public:
-	Sais(T *const _data, suffix *const _P, byte *const _bits, const unsigned _N, unsigned *const _R, const unsigned _K)
+	SaIs(T *const _data, suffix *const _P, byte *const _bits, const unsigned _N, unsigned *const _R, const unsigned _K)
 	: data(_data), P(_P), bits(_bits), N(_N), R(_R), RE(_R+1), K(_K), n1(0), name(0)	{
 		classify();
 		reduce();
@@ -219,10 +222,10 @@ public:
 	}
 };
 
-template<>	void Sais<byte>::checkData()	{
+template<>	void SaIs<byte>::checkData()	{
 	assert(K==0x100);
 }
-template<>	void Sais<suffix>::checkData()	{
+template<>	void SaIs<suffix>::checkData()	{
 	for(unsigned i=0; i<N; ++i)
 		assert(data[i]>=0 && data[i]<K);
 }
@@ -258,7 +261,7 @@ int Archon::en_read(FILE *const fx, unsigned ns)	{
 }
 
 int Archon::en_compute()	{
-	Sais<byte>( str, P, bitMask, N, R, 256 );
+	SaIs<byte>( str, P, bitMask, N, R, 256 );
 	return 0;
 }
 
