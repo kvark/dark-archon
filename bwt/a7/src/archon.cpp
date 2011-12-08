@@ -177,15 +177,14 @@ class	SaIs	{
 		// get the list of LMS strings
 		// LMS number -> actual string number
 		//note: going left to right here!
-		for(i=0,j=0; i<N; ++i)	{
-			//note: this is the only place after recursion
-			// where we need the bit array
-			// moreover, we use it in a sequential order
-			//todo: don't use bit array here
-			if(isElbow(i))	{
-				assert( n1+j<N );
-				s1[j++] = i+1;
+		for(i=0,j=0; i+1<N; )	{
+			if(data[i] >= data[i+1])	{
+				++i; continue;
 			}
+			assert( n1+j<N );
+			s1[j++] = ++i;
+			while(i+1<N && data[i] <= data[i+1])
+				++i;
 		}
 		assert(j==n1);
 		// update the indices in the sorted array
