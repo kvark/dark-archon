@@ -7,6 +7,26 @@
 //	Memory requirements:		7.125n
 //	Execution time complexity:	O(n)
 
+class BucketStorage	{
+	enum	{
+		SIZE_RESERVED	= 0x1000,
+		SIZE_UNIT		= 0x100,
+	};
+	unsigned arr[SIZE_RESERVED], have;
+public:
+	void reset()	{
+		have = 0;
+	}
+	unsigned* obtain(const unsigned K)	{
+		if (K<=SIZE_UNIT && have+K<=SIZE_RESERVED)	{
+			have += K;
+			return arr+have-K;
+		}
+		return NULL;
+	}
+}static sBuckets;
+
+
 //--------------------------------------------------------//
 
 template<typename T>
@@ -14,7 +34,7 @@ class	SaIs	{
 	T *const data;
 	suffix *const P;
 	byte *const bits;
-	unsigned *const R, *const RE;
+	unsigned *const R, *const RE, *const R2;
 	const unsigned N,K;
 	unsigned n1,name;
 
@@ -44,7 +64,13 @@ class	SaIs	{
 		assert(!sum);
 	}
 
-	void buckets();
+	void buckets()	{
+		if(R2)	{
+			memcpy( R, R2, K*sizeof(unsigned) );
+			R[K] = N;
+		}else
+			makeBuckets();
+	}
 
 	void induce()	{
 		const unsigned NL = N-1U;
@@ -213,6 +239,8 @@ class	SaIs	{
 		}
 		// scatter LMS back into proper positions
 		buckets();
+		//option: generate buckets again here
+		// but make R2 static
 #		ifndef	NDEBUG
 		memset( P+n1, 0, (N-n1)*sizeof(suffix) );
 #		endif
@@ -232,31 +260,25 @@ class	SaIs	{
 
 public:
 	SaIs(T *const _data, suffix *const _P, byte *const _bits, const unsigned _N, unsigned *const _R, const unsigned _K)
-	: data(_data), P(_P), bits(_bits), N(_N), R(_R), RE(_R+1), K(_K), n1(0), name(0)	{
+	: data(_data), P(_P), bits(_bits), N(_N), R(_R), RE(_R+1), R2(sBuckets.obtain(_K)), K(_K), n1(0), name(0)	{
 		checkData();
+		if(R2)	{
+			makeBuckets();
+			memcpy( R2, R, K*sizeof(unsigned) );
+		}
 		reduce();
 		solve();
 		goback();
 	}
 };
 
-static	unsigned R2[0x101];
-
 template<>	void SaIs<byte>::checkData()	{
-	assert(K==0x100);
-	makeBuckets();
-	memcpy( R2, R, sizeof(R2) );
+	assert( K==0x100 );
+	assert( sizeof(sBuckets) >= K*sizeof(unsigned) );
 }
 template<>	void SaIs<suffix>::checkData()	{
 	for(unsigned i=0; i<N; ++i)
 		assert(data[i]>=0 && data[i]<K);
-}
-
-template<>	void SaIs<byte>::buckets()	{
-	memcpy( R, R2, sizeof(R2) );
-}
-template<>	void SaIs<suffix>::buckets()	{
-	makeBuckets();
 }
 
 
@@ -290,6 +312,7 @@ int Archon::en_read(FILE *const fx, unsigned ns)	{
 }
 
 int Archon::en_compute()	{
+	sBuckets.reset();
 	SaIs<byte>( str, P, bitMask, N, R, 256 );
 	return 0;
 }
