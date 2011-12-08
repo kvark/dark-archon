@@ -4,7 +4,7 @@
 
 #include "archon.h"
 
-//	Memory requirements:		7.125n
+//	Memory requirements:		7n
 //	Execution time complexity:	O(n)
 
 class BucketStorage	{
@@ -33,7 +33,6 @@ template<typename T>
 class	SaIs	{
 	T *const data;
 	suffix *const P;
-	byte *const bits;
 	unsigned *const R, *const RE, *const R2;
 	const unsigned N, K;
 	unsigned n1, name;
@@ -43,15 +42,6 @@ class	SaIs	{
 		MASK_UP		= 1U<<30U,
 		MASK_SUF	= MASK_UP-1U,
 	};
-
-	void setUp(const unsigned i)	{
-		bits[i>>3] |= 1<<(i&7);
-	}
-	bool isElbow(const unsigned i) const	{
-		assert(i<=N);
-		const dword dx = *(dword*)( bits+(i>>3) ) >> (i&0x7U);
-		return (dx & 3) == 1;	// has to be 10b
-	}
 
 	void checkData();
 
@@ -73,11 +63,14 @@ class	SaIs	{
 			makeBuckets();
 	}
 
+	//todo: use templates to remove unnecessary checks
+	// on the second call to the function
 	void induce()	{
 		const unsigned NL = N-1U;
 		// condition "(j-1U) >= NL" cuts off
 		// all 0-s and the N at once
 		unsigned i;
+		suffix add;
 		assert(N);
 		//left2right
 		buckets();
@@ -88,7 +81,7 @@ class	SaIs	{
 				continue;
 			const T cur = data[j];
 			if(data[j-1U] <= cur)	{
-				suffix add = 0;
+				add = 0;
 				if(data[j-1U] == cur)
 					add = P[i] & MASK_UP;	
 				P[R[cur]++] = j+1U + add;
@@ -96,8 +89,7 @@ class	SaIs	{
 		}
 		//right2left
 		buckets();
-		//P[--RE[data[0]]] = 1U;
-		suffix add = MASK_UP;
+		add = MASK_UP;
 		if(N>1 && data[0]<data[1])
 			add += MASK_LMS;
 		P[--RE[data[0]]] = 1U + add;
@@ -155,24 +147,9 @@ class	SaIs	{
 
 	void reduce()	{
 		unsigned i,j;
-		// classification stage
-		memset( bits, 0, (N>>3)+1 );
-		//todo: find the number of LMS here
-		j = data[0]+1U;
-		for(i=0; i!=N; ++i)	{
-			const unsigned& cur = data[i];
-			if(j > cur)	{
-				setUp(i);
-				j = cur+1;
-			}else
-				j = cur;
-		}
-		// make sure the reversed string
-		// does not start with LMS
-		setUp(N);
 		// scatter LMS into bucket positions
 		memset( P, 0, N*sizeof(suffix) );
-		P[N] = 0;
+		P[N] = 0 + MASK_UP;
 		buckets();
 		//todo: optimize more
 		bool prevUp = true;
@@ -194,16 +171,6 @@ class	SaIs	{
 		// sort by induction (evil technology!)
 		induce();
 		// pack LMS into the first n1 suffixes
-		/*for(j=i=0; ;++i)	{
-			const suffix pos = P[i];
-			assert(pos>0);
-			if(isElbow(pos-1U))	{
-				//todo: pack this bit into P[i]
-				P[j] = pos;
-				if(++j == n1)
-					break;
-			}
-		}*/
 		for(j=i=0; ;++i)	{
 			const suffix suf = P[i] & MASK_SUF;
 			assert(suf>0 && i<N);
@@ -232,7 +199,7 @@ class	SaIs	{
 	void solve()	{
 		suffix *const s1 = P+N-n1;
 		if(name<n1)	{
-			SaIs<suffix>( s1, P, bits, n1, R, name );
+			SaIs<suffix>( s1, P, n1, R, name );
 		}else	{
 			// permute back from values into indices
 			assert(name == n1);
@@ -287,8 +254,8 @@ class	SaIs	{
 	}
 
 public:
-	SaIs(T *const _data, suffix *const _P, byte *const _bits, const unsigned _N, unsigned *const _R, const unsigned _K)
-	: data(_data), P(_P), bits(_bits)
+	SaIs(T *const _data, suffix *const _P, const unsigned _N, unsigned *const _R, const unsigned _K)
+	: data(_data), P(_P)
 	, R(_R), RE(_R+1), R2(sBuckets.obtain(_K-1))
 	, N(_N), K(_K), n1(0), name(0)	{
 		assert( N<=MASK_SUF );
@@ -321,16 +288,14 @@ Archon::Archon(const unsigned Nx)
 : P(new suffix[Nx+0x102])
 , R(new unsigned[((Nx>>9) ? (Nx>>1) : 0x100)+1])
 , str(new byte[Nx+1])
-, bitMask(new byte[(Nx>>3)+4])
 , Nmax(Nx), N(0), baseId(0) {
-	assert(P && R && str && bitMask);
+	assert(P && R && str);
 }
 
 Archon::~Archon()	{
 	delete[] P;
 	delete[] R;
 	delete[] str;
-	delete[] bitMask;
 }
 
 
@@ -344,7 +309,7 @@ int Archon::en_read(FILE *const fx, unsigned ns)	{
 
 int Archon::en_compute()	{
 	sBuckets.reset();
-	SaIs<byte>( str, P, bitMask, N, R, 256 );
+	SaIs<byte>( str, P, N, R, 256 );
 	return 0;
 }
 
