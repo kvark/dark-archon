@@ -7,7 +7,6 @@ class Archon	{
 	suffix *const P;
 	unsigned *const R;
 	byte *const str;
-	byte *const bitMask;
 	const unsigned Nmax;
 	unsigned N, baseId;
 	void roll(const unsigned i);
