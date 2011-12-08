@@ -4,7 +4,7 @@
 
 #include "archon.h"
 
-//	Memory requirements:		7.25n
+//	Memory requirements:		7.125n
 //	Execution time complexity:	O(n)
 
 //--------------------------------------------------------//
@@ -162,7 +162,7 @@ class	SaIs	{
 	void solve()	{
 		suffix *const s1 = P+N-n1;
 		if(name<n1)	{
-			SaIs<suffix>( s1, P, bits+(N>>3)+1, n1, R, name );
+			SaIs<suffix>( s1, P, bits, n1, R, name );
 		}else	{
 			// permute back from values into indices
 			assert(name == n1);
@@ -238,7 +238,7 @@ Archon::Archon(const unsigned Nx)
 : P(new suffix[Nx+1])
 , R(new unsigned[((Nx>>9) ? (Nx>>1) : 256)+1])
 , str(new byte[Nx+1])
-, bitMask(new byte[(Nx>>2)+4])
+, bitMask(new byte[(Nx>>3)+4])
 , Nmax(Nx), N(0), baseId(0) {
 	assert(P && R && str && bitMask);
 }
