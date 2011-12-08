@@ -35,12 +35,13 @@ class	SaIs	{
 	suffix *const P;
 	byte *const bits;
 	unsigned *const R, *const RE, *const R2;
-	const unsigned N,K;
-	unsigned n1,name;
+	const unsigned N, K;
+	unsigned n1, name;
 
 	enum {
-		SUF_MASK = 0x7FFFFFFFU,
-		LMS_MASK = 0x80000000U
+		MASK_LMS	= 1U<<31U,
+		MASK_UP		= 1U<<30U,
+		MASK_SUF	= MASK_UP-1U,
 	};
 
 	void setUp(const unsigned i)	{
@@ -66,8 +67,8 @@ class	SaIs	{
 
 	void buckets()	{
 		if(R2)	{
-			memcpy( R, R2, K*sizeof(unsigned) );
-			R[K] = N;
+			memcpy( RE, R2, (K-1U)*sizeof(unsigned) );
+			R[0] = 0; R[K] = N;
 		}else
 			makeBuckets();
 	}
@@ -82,23 +83,38 @@ class	SaIs	{
 		buckets();
 		for(i=0; i!=N; ++i)	{
 			//todo: fix to support 2Gb input
-			const suffix j = P[i];
+			const suffix j = P[i] & MASK_SUF;
 			if((j-1U) >= NL)
 				continue;
 			const T cur = data[j];
-			if(data[j-1] <= cur)
-				P[R[cur]++] = j+1;
+			if(data[j-1U] <= cur)	{
+				suffix add = 0;
+				if(data[j-1U] == cur)
+					add = P[i] & MASK_UP;	
+				P[R[cur]++] = j+1U + add;
+			}
 		}
 		//right2left
 		buckets();
-		P[--RE[data[0]]] = 1;
+		//P[--RE[data[0]]] = 1U;
+		suffix add = MASK_UP;
+		if(N>1 && data[0]<data[1])
+			add += MASK_LMS;
+		P[--RE[data[0]]] = 1U + add;
 		i=N; do	{
-			const suffix j = P[--i];
+			const suffix j = P[--i] & MASK_SUF;
 			if((j-1U) >= NL)
 				continue;
 			const T cur = data[j];
-			if(data[j-1] >= cur)
-				P[--RE[cur]] = j+1;
+			if(data[j-1U] >= cur)	{
+				add = 0;
+				if(data[j-1U] != cur || (P[i] & MASK_UP))	{
+					add = MASK_UP;
+					if(j+1U<N && cur<data[j+1U])
+						add += MASK_LMS;
+				}
+				P[--RE[cur]] = j+1U + add;
+			}
 		}while(i);
 	}
 
@@ -161,13 +177,13 @@ class	SaIs	{
 		//todo: optimize more
 		bool prevUp = true;
 		for(j=N,n1=0;;)	{
-			for(i=--j; j && data[j-1]==data[i]; --j);
-			if(j && data[j-1]<data[i])	{
+			for(i=--j; j && data[j-1U]==data[i]; --j);
+			if(j && data[j-1U]<data[i])	{
 				prevUp = false;
 			}else	{	//up
 				if(!prevUp)	{
 					++n1; // found LMS!
-					P[--RE[data[i]]] = i+1;
+					P[--RE[data[i]]] = i+1U + MASK_LMS + MASK_UP;
 					prevUp = true;
 				}
 				if(!j)
@@ -178,12 +194,21 @@ class	SaIs	{
 		// sort by induction (evil technology!)
 		induce();
 		// pack LMS into the first n1 suffixes
-		for(j=i=0; ;++i)	{
+		/*for(j=i=0; ;++i)	{
 			const suffix pos = P[i];
 			assert(pos>0);
-			if(isElbow(pos-1))	{
+			if(isElbow(pos-1U))	{
 				//todo: pack this bit into P[i]
 				P[j] = pos;
+				if(++j == n1)
+					break;
+			}
+		}*/
+		for(j=i=0; ;++i)	{
+			const suffix suf = P[i] & MASK_SUF;
+			assert(suf>0 && i<N);
+			if(P[i] & MASK_LMS)	{
+				P[j] = suf;
 				if(++j == n1)
 					break;
 			}
@@ -197,7 +222,7 @@ class	SaIs	{
 		for(i=N,j=N; ;)		{
 			assert( i>n1 );
 			if(P[--i])	{
-				P[--j] = P[i]-1;
+				P[--j] = P[i]-1U;
 				if(j == N-n1)
 					break;
 			}
@@ -212,7 +237,7 @@ class	SaIs	{
 			// permute back from values into indices
 			assert(name == n1);
 			for(unsigned i=0; i<n1; ++i)
-				P[s1[i]] = i+1;
+				P[s1[i]] = i+1U;
 		}
 	}
 
@@ -223,11 +248,11 @@ class	SaIs	{
 		// LMS number -> actual string number
 		//note: going left to right here!
 		for(i=0,j=0; ++i<N; )	{
-			if(data[i-1] >= data[i])	
+			if(data[i-1U] >= data[i])	
 				continue;
 			assert( n1+j<N );
 			s1[j++] = i;
-			while(++i<N && data[i-1] <= data[i]);
+			while(++i<N && data[i-1U] <= data[i]);
 		}
 		assert(j==n1);
 		// update the indices in the sorted array
@@ -235,7 +260,7 @@ class	SaIs	{
 		for(i=0; i<n1; ++i)	{
 			j = P[i];
 			assert(j>0 && j<=n1);
-			P[i] = s1[j-1];
+			P[i] = s1[j-1U];
 		}
 		// scatter LMS back into proper positions
 		buckets();
@@ -248,23 +273,29 @@ class	SaIs	{
 		for(i=n1; i--; )	{
 			j = P[i]; P[i] = 0;
 			assert(j>0 && j<=N				&& "Invalid suffix!");
-			assert(data[j-1] <= prev_sym		&& "Not sorted!");
-			unsigned *const pr = RE+data[j-1];
+			assert(data[j-1U] <= prev_sym	&& "Not sorted!");
+			unsigned *const pr = RE+data[j-1U];
 			P[--*pr] = j;
 			assert(pr[0] >= pr[-1]	&& "Stepped twice on the same suffix!");
 			assert(pr[0] >= i		&& "Not sorted properly!");
 		}
 		// induce the rest of suffixes
 		induce();
+		// clean up the masks (TEMPORARY!)
+		for(i=0; i!=N; ++i)
+			P[i] &= MASK_SUF;
 	}
 
 public:
 	SaIs(T *const _data, suffix *const _P, byte *const _bits, const unsigned _N, unsigned *const _R, const unsigned _K)
-	: data(_data), P(_P), bits(_bits), N(_N), R(_R), RE(_R+1), R2(sBuckets.obtain(_K)), K(_K), n1(0), name(0)	{
+	: data(_data), P(_P), bits(_bits)
+	, R(_R), RE(_R+1), R2(sBuckets.obtain(_K-1))
+	, N(_N), K(_K), n1(0), name(0)	{
+		assert( N<=MASK_SUF );
 		checkData();
 		if(R2)	{
 			makeBuckets();
-			memcpy( R2, R, K*sizeof(unsigned) );
+			memcpy( R2, RE, (K-1)*sizeof(unsigned) );
 		}
 		reduce();
 		solve();
@@ -352,7 +383,7 @@ int Archon::de_compute()	{
 	// compute buchet heads
 	memset( R, 0, 0x100*sizeof(unsigned) );
 	for(i=0; i!=N; ++i)
-		R[str[i]] += 1;
+		++R[str[i]];
 	for(k=N,i=0x100; i--;)
 		R[i] = (k-=R[i]);
 	// fill the jump table
@@ -360,7 +391,7 @@ int Archon::de_compute()	{
 	memset( P, 0, (N+1)*sizeof(unsigned) );
 #	endif
 	for(i=0; i<baseId; i++)		roll(i);
-	for(i=baseId+1; i<N; i++)	roll(i);
+	for(i=baseId+1U; i<N; i++)	roll(i);
 	roll(baseId);
 	return 0;
 }
