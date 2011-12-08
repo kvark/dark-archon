@@ -34,7 +34,7 @@ class	SaIs	{
 
 	void checkData();
 
-	void buckets()	{
+	void makeBuckets()	{
 		memset( R, 0, K*sizeof(unsigned) );
 		unsigned i,sum;
 		for(i=0; i<N; ++i)
@@ -43,6 +43,8 @@ class	SaIs	{
 			R[i] = (sum -= R[i]);
 		assert(!sum);
 	}
+
+	void buckets();
 
 	void induce()	{
 		const unsigned NL = N-1U;
@@ -238,12 +240,23 @@ public:
 	}
 };
 
+static	unsigned R2[0x101];
+
 template<>	void SaIs<byte>::checkData()	{
 	assert(K==0x100);
+	makeBuckets();
+	memcpy( R2, R, sizeof(R2) );
 }
 template<>	void SaIs<suffix>::checkData()	{
 	for(unsigned i=0; i<N; ++i)
 		assert(data[i]>=0 && data[i]<K);
+}
+
+template<>	void SaIs<byte>::buckets()	{
+	memcpy( R, R2, sizeof(R2) );
+}
+template<>	void SaIs<suffix>::buckets()	{
+	makeBuckets();
 }
 
 
