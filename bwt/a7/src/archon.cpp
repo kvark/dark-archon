@@ -18,6 +18,11 @@ class	SaIs	{
 	const unsigned N,K;
 	unsigned n1,name;
 
+	enum {
+		SUF_MASK = 0x7FFFFFFFU,
+		LMS_MASK = 0x80000000U
+	};
+
 	void setUp(const unsigned i)	{
 		bits[i>>3] |= 1<<(i&7);
 	}
@@ -48,6 +53,7 @@ class	SaIs	{
 		//left2right
 		buckets();
 		for(i=0; i!=N; ++i)	{
+			//todo: fix to support 2Gb input
 			const suffix j = P[i];
 			if((j-1U) >= NL)
 				continue;
@@ -124,12 +130,20 @@ class	SaIs	{
 		memset( P, 0, N*sizeof(suffix) );
 		P[N] = 0;
 		buckets();
-		for(n1=0,i=N; i--; )	{
-			//todo: use LMS count to terminate the loop
-			if(isElbow(i))	{
-				//todo: don't use the bit array here
-				P[--RE[data[i]]] = i+1;
-				++n1;
+		//todo: optimize more
+		bool prevUp = true;
+		for(j=N,n1=0;;)	{
+			for(i=--j; j && data[j-1]==data[i]; --j);
+			if(j && data[j-1]<data[i])	{
+				prevUp = false;
+			}else	{	//up
+				if(!prevUp)	{
+					++n1; // found LMS!
+					P[--RE[data[i]]] = i+1;
+					prevUp = true;
+				}
+				if(!j)
+					break;
 			}
 		}
 		assert(n1+n1<=N);
