@@ -29,24 +29,6 @@ class	SaIs	{
 
 	void checkData();
 
-	void classify()	{
-		checkData();
-		memset( bits, 0, (N>>3)+1 );
-		//todo: find the number of LMS here
-		unsigned prev = data[0]+1;
-		for(int i=0; i!=N; ++i)	{
-			const unsigned& cur = data[i];
-			if(prev > cur)	{
-				setUp(i);
-				prev = cur+1;
-			}else
-				prev = cur;
-		}
-		// make sure the reversed string
-		// does not start with LMS
-		setUp(N);
-	}
-
 	void buckets()	{
 		memset( R, 0, K*sizeof(unsigned) );
 		unsigned i,sum;
@@ -59,7 +41,8 @@ class	SaIs	{
 
 	void induce()	{
 		const unsigned NL = N-1U;
-		// condition "(j-1U) >= NL" cuts off all 0-s and the N at once
+		// condition "(j-1U) >= NL" cuts off
+		// all 0-s and the N at once
 		unsigned i;
 		assert(N);
 		//left2right
@@ -122,9 +105,24 @@ class	SaIs	{
 
 	void reduce()	{
 		unsigned i,j;
+		// classification stage
+		memset( bits, 0, (N>>3)+1 );
+		//todo: find the number of LMS here
+		j = data[0]+1U;
+		for(i=0; i!=N; ++i)	{
+			const unsigned& cur = data[i];
+			if(j > cur)	{
+				setUp(i);
+				j = cur+1;
+			}else
+				j = cur;
+		}
+		// make sure the reversed string
+		// does not start with LMS
+		setUp(N);
+		// scatter LMS into bucket positions
 		memset( P, 0, N*sizeof(suffix) );
 		P[N] = 0;
-		// scatter LMS into bucket positions
 		buckets();
 		for(n1=0,i=N; i--; )	{
 			//todo: use LMS count to terminate the loop
@@ -149,7 +147,9 @@ class	SaIs	{
 			}
 		}
 		// value LMS suffixes
+#		ifndef	NDEBUG
 		memset( P+n1, 0, (N-n1)*sizeof(suffix) );
+#		endif
 		valueLMS();
 		// pack values into the last n1 suffixes
 		for(i=N,j=N; ;)		{
@@ -197,7 +197,9 @@ class	SaIs	{
 		}
 		// scatter LMS back into proper positions
 		buckets();
+#		ifndef	NDEBUG
 		memset( P+n1, 0, (N-n1)*sizeof(suffix) );
+#		endif
 		T prev_sym = K-1;
 		for(i=n1; i--; )	{
 			j = P[i]; P[i] = 0;
@@ -215,7 +217,7 @@ class	SaIs	{
 public:
 	SaIs(T *const _data, suffix *const _P, byte *const _bits, const unsigned _N, unsigned *const _R, const unsigned _K)
 	: data(_data), P(_P), bits(_bits), N(_N), R(_R), RE(_R+1), K(_K), n1(0), name(0)	{
-		classify();
+		checkData();
 		reduce();
 		solve();
 		goback();
@@ -297,12 +299,16 @@ int Archon::de_read(FILE *const fx, unsigned ns)	{
 
 int Archon::de_compute()	{
 	unsigned i,k;
+	// compute buchet heads
 	memset( R, 0, 0x100*sizeof(unsigned) );
-	memset( P, 0, (N+1)*sizeof(unsigned) );		// for debug
 	for(i=0; i!=N; ++i)
 		R[str[i]] += 1;
 	for(k=N,i=0x100; i--;)
 		R[i] = (k-=R[i]);
+	// fill the jump table
+#	ifndef	NDEBUG
+	memset( P, 0, (N+1)*sizeof(unsigned) );
+#	endif
 	for(i=0; i<baseId; i++)		roll(i);
 	for(i=baseId+1; i<N; i++)	roll(i);
 	roll(baseId);
