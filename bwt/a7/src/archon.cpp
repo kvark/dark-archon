@@ -36,7 +36,6 @@ class	Constructor	{
 	index *const R, *const RE, *const R2;
 	const index N, K;
 	index n1, name;
-	const int strategy;
 
 	enum {
 		MASK_LMS	= 1U<<31U,
@@ -495,34 +494,23 @@ public:
 	Constructor(T *const _data, suffix *const _P, const index _N, index *const _R, const index _K)
 	: data(_data), P(_P)
 	, R(_R), RE(_R+1), R2(sBuckets.obtain(_K-1))
-	, N(_N), K(_K), n1(0), name(0), strategy(decide())	{
+	, N(_N), K(_K), n1(0), name(0)	{
 		assert( N<=MASK_SUF );
 		checkData();
-		if(R2)	{
-			makeBuckets();
-			memcpy( R2, RE, (K-1)*sizeof(index) );
-		}
-		switch(strategy)	{
-		case 0:
-			directSort();
-			break;
-		case 1:
-			reduce_1();
-			solve();
-			derive_1();
-			break;
-		case 2:
-			reduce_2();
-			solve();
-			derive_2();
-			break;
-		case 3:
-			reduce_3();
-			solve();
-			derive_3();
-			break;
-		}
-		
+		const int strategy = decide();
+		if(strategy)	{
+			if(R2)	{
+				makeBuckets();
+				memcpy( R2, RE, (K-1)*sizeof(index) );
+			}
+			if(strategy==1)
+				reduce_1(), solve(), derive_1();
+			if(strategy==2)
+				reduce_2(), solve(), derive_2();
+			if(strategy==3)
+				reduce_3(), solve(), derive_3();
+		}else
+			directSort();	
 	}
 };
 
