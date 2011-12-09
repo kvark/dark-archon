@@ -1,25 +1,26 @@
 typedef	unsigned int	suffix;
+typedef	unsigned int	index;
 typedef unsigned char	byte;
 typedef unsigned long	dword;
 
 
 class Archon	{
 	suffix *const P;
-	unsigned *const R;
+	index *const R;
 	byte *const str;
-	const unsigned Nmax;
-	unsigned N, baseId;
-	void roll(const unsigned i);
+	const index Nmax;
+	index N, baseId;
+	void roll(const index i);
 
 public:
-	Archon(const unsigned N);
+	Archon(const index N);
 	~Archon();
 	// encoding
-	int en_read(FILE *const fx, unsigned ns);
+	int en_read(FILE *const fx, index ns);
 	int en_compute();
 	int en_write(FILE *const fx);
 	// decoding
-	int de_read(FILE *const fx, unsigned ns);
+	int de_read(FILE *const fx, index ns);
 	int de_compute();
 	int de_write(FILE *const fx);
 };
