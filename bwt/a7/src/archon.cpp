@@ -67,6 +67,8 @@ class	Constructor	{
 		return true;
 	}
 
+	//todo: combine this pass with the decision function
+	// and skip bucket sorting for the first time after
 	void makeBuckets()	{
 		memset( R, 0, K*sizeof(index) );
 		index i,sum;
@@ -497,26 +499,32 @@ public:
 	, N(_N), K(_K), n1(0), name(0)	{
 		assert( N<=MASK_SUF );
 		checkData();
+		if(R2)	{
+			makeBuckets();
+			memcpy( R2, RE, (K-1)*sizeof(index) );
+		}
 		const int strategy = decide();
-		if(strategy)	{
-			if(R2)	{
-				makeBuckets();
-				memcpy( R2, RE, (K-1)*sizeof(index) );
-			}
-			if(strategy==1)
-				reduce_1(), solve(), derive_1();
-			if(strategy==2)
-				reduce_2(), solve(), derive_2();
-			if(strategy==3)
-				reduce_3(), solve(), derive_3();
-		}else
-			directSort();	
+		if(!strategy)	{
+			directSort();
+		}else if(strategy==1)	{
+			reduce_1();
+			solve();
+			derive_1();
+		}else if(strategy==2)	{
+			reduce_2();
+			solve();
+			derive_2();
+		}else if(strategy==3)	{
+			reduce_3();
+			solve();
+			derive_3();
+		}else assert(!"a strategy");
 	}
 };
 
 template<>	void Constructor<byte>::checkData()	{
 	assert( K==0x100 );
-	assert( sizeof(sBuckets) >= K*sizeof(index) );
+	assert( sizeof(sBuckets)/sizeof(index) > K );
 }
 template<>	void Constructor<suffix>::checkData()	{
 	for(index i=0; i<N; ++i)
