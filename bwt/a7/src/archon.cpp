@@ -36,12 +36,17 @@ class	SaIs	{
 	unsigned *const R, *const RE, *const R2;
 	const unsigned N, K;
 	unsigned n1, name;
+	const int strategy;
 
 	enum {
 		MASK_LMS	= 1U<<31U,
 		MASK_UP		= 1U<<30U,
 		MASK_SUF	= MASK_UP-1U,
 	};
+
+	int decide() const	{
+		return 1;
+	}
 
 	void checkData();
 
@@ -65,6 +70,8 @@ class	SaIs	{
 
 	//todo: use templates to remove unnecessary checks
 	// on the second call to the function
+	//todo: use buckets to traverse the SA efficiently
+	// if R2 is available
 	void induce()	{
 		const unsigned NL = N-1U;
 		// condition "(j-1U) >= NL" cuts off
@@ -75,7 +82,7 @@ class	SaIs	{
 		//left2right
 		buckets();
 		for(i=0; i!=N; ++i)	{
-			//todo: fix to support 2Gb input
+			//todo: fix to support 1Gb input
 			const suffix j = P[i] & MASK_SUF;
 			if((j-1U) >= NL)
 				continue;
@@ -181,9 +188,7 @@ class	SaIs	{
 			}
 		}
 		// value LMS suffixes
-#		ifndef	NDEBUG
 		memset( P+n1, 0, (N-n1)*sizeof(suffix) );
-#		endif
 		valueLMS();
 		// pack values into the last n1 suffixes
 		for(i=N,j=N; ;)		{
@@ -233,9 +238,7 @@ class	SaIs	{
 		buckets();
 		//option: generate buckets again here
 		// but make R2 static
-#		ifndef	NDEBUG
 		memset( P+n1, 0, (N-n1)*sizeof(suffix) );
-#		endif
 		T prev_sym = K-1;
 		for(i=n1; i--; )	{
 			j = P[i]; P[i] = 0;
@@ -257,7 +260,7 @@ public:
 	SaIs(T *const _data, suffix *const _P, const unsigned _N, unsigned *const _R, const unsigned _K)
 	: data(_data), P(_P)
 	, R(_R), RE(_R+1), R2(sBuckets.obtain(_K-1))
-	, N(_N), K(_K), n1(0), name(0)	{
+	, N(_N), K(_K), n1(0), name(0), strategy(decide())	{
 		assert( N<=MASK_SUF );
 		checkData();
 		if(R2)	{
