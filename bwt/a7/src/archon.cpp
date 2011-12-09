@@ -44,6 +44,9 @@ class	Constructor	{
 		MASK_SUF	= MASK_UP-1U,
 	};
 
+	//---------------------------------
+	//	Commonly used routines	//
+
 	int decide() const	{
 		index bins[4] = {0,1,0,0};
 		byte mask = 3U;
@@ -52,10 +55,18 @@ class	Constructor	{
 			mask = (mask<<1U) + (diff>0 ? 1U:0U);
 			++bins[mask&3U];
 		}
-		return 0;
+		return 2;
 	}
 
 	void checkData();
+
+	bool checkUnique(const index num)	{
+		for(index i=0; i!=num; ++i)
+			for(index j=i+1; j!=num; ++j)
+				if(P[i]==P[j])
+					return false;
+		return true;
+	}
 
 	void makeBuckets()	{
 		memset( R, 0, K*sizeof(index) );
@@ -74,6 +85,109 @@ class	Constructor	{
 		}else
 			makeBuckets();
 	}
+
+	void packTargetIndices()	{
+		index i,j;
+		// pack LMS into the first n1 suffixes
+		if(!n1)
+			return;
+		for(j=i=0; ;++i)	{
+			const suffix suf = P[i] & MASK_SUF;
+			assert(suf>0 && i<N);
+			if(P[i] & MASK_LMS)	{
+				P[j] = suf;
+				if(++j == n1)
+					break;
+			}
+		}
+	}
+
+	void computeTargetValues()	{
+		// compare LMS using known lengths
+		index i, prev_len = 0;
+		suffix prev = 0;
+		for(name=0,i=0; i!=n1; ++i)	{
+			const suffix cur = P[i];
+			index &cur_len = P[n1+(cur>>1)];
+			assert(cur_len);
+			//todo: work around the jump
+			if(cur_len == prev_len)	{
+				index j=1; do	{
+					if(data[cur-j] != data[prev-j])
+						goto greater;
+				}while(++j <= cur_len);
+			}else	{
+				greater:	//warning!
+				++name; prev = cur;
+				prev_len = cur_len;
+			}
+			cur_len = name;
+		}
+	}
+
+	void packTargetValues()	{
+		index i,j;
+		if(!n1)
+			return;
+		// pack values into the last n1 suffixes
+		for(i=N,j=N; ;)		{
+			assert( i>n1 );
+			if(P[--i])	{
+				P[--j] = P[i]-1U;
+				if(j == N-n1)
+					break;
+			}
+		}
+	}
+
+	//---------------------------------
+	//	Strategy-0 implementation	//
+
+	void directSort()	{
+		for(index i=0; i!=N; ++i)
+			P[i] = i+1;
+		ray(P,N,1);
+	}
+
+	void ray(suffix *A, index num, unsigned depth)	{
+		while(num>1)	{
+			suffix *x,*z;
+			{
+				z = (x=A)+num;
+				suffix s = A[num>>1];
+				if(s<depth)	{
+					assert(s+1==depth);
+					const suffix t = A[num>>1] = A[num-1];
+					*--z=s; s=t; --num;
+				}
+				assert(s>=depth);
+				const T w = data[s-depth];
+				suffix *y = x;
+				for(;;)	{
+					s = *y;
+					if(s<depth)
+						goto more;
+					const T q = data[s-depth];
+					if(q <= w)	{
+						if(q != w) *y=*x,*x++=s;
+						if(++y == z) break;
+					}else	{
+						more:
+						if(--z == y) break;
+						*y=*z,*z=s;
+					}
+				}
+				y=z; z=A+num;
+				num = y-x;
+			}
+			ray(A,x-A,depth); A = x+num;
+			ray(A,z-A,depth); A = x;
+			++depth;
+		}
+	}
+
+	//---------------------------------
+	//	Strategy-1 implementation	//
 
 	// here is the slowest part of the method!
 	//todo: use templates/separate function
@@ -126,39 +240,19 @@ class	Constructor	{
 		}while(i);
 	}
 
-	void valueLMS()	{
-		// using area of P[n1,N)
-		index i,j;
+	void computeTargetLengths_1()	{
+		index i=0,j=0;	// using area of P[n1,N)
 		// find the length of each LMS substring
 		// and write it into P[n1+(x>>1)]
 		// no collisions guaranteed because LMS distance>=2
-		for(i=0,j=0; ++i<N; )	{
+		while(++i<N)	{
 			if(data[i-1] >= data[i])	
 				continue;
 			P[n1 + (i>>1)] = i-j;	//length
 			j = i;
 			while(++i<N && data[i-1] <= data[i]);
 		}
-		// compare LMS using known lengths
-		index prev_len = 0;
-		suffix prev = 0;
-		for(name=0,i=0; i!=n1; ++i)	{
-			const suffix cur = P[i];
-			index &cur_len = P[n1+(cur>>1)];
-			assert(cur_len);
-			//todo: work around the jump
-			if(cur_len == prev_len)	{
-				j=1; do	{
-					if(data[cur-j] != data[prev-j])
-						goto greater;
-				}while(++j <= cur_len);
-			}else	{
-				greater:	//warning!
-				++name; prev = cur;
-				prev_len = cur_len;
-			}
-			cur_len = name;
-		}
+
 	}
 
 	void reduce_1()	{
@@ -183,31 +277,17 @@ class	Constructor	{
 					break;
 			}
 		}
-		assert(n1+n1<=N);
+
 		// sort by induction (evil technology!)
+		assert(n1+n1<=N);
 		induce_1();
-		// pack LMS into the first n1 suffixes
-		for(j=i=0; ;++i)	{
-			const suffix suf = P[i] & MASK_SUF;
-			assert(suf>0 && i<N);
-			if(P[i] & MASK_LMS)	{
-				P[j] = suf;
-				if(++j == n1)
-					break;
-			}
-		}
-		// value LMS suffixes
+
+		// scatter into indices and values
+		packTargetIndices();
 		memset( P+n1, 0, (N-n1)*sizeof(suffix) );
-		valueLMS();
-		// pack values into the last n1 suffixes
-		for(i=N,j=N; ;)		{
-			assert( i>n1 );
-			if(P[--i])	{
-				P[--j] = P[i]-1U;
-				if(j == N-n1)
-					break;
-			}
-		}
+		computeTargetLengths_1();
+		computeTargetValues();
+		packTargetValues();
 	}
 
 	void solve()	{
@@ -266,70 +346,150 @@ class	Constructor	{
 	}
 
 	//---------------------------------
-	//	Ternary Qsort	//
+	//	Strategy-2 implementation	//
 
-	void directSort()	{
-		for(index i=0; i!=N; ++i)
-			P[i] = i+1;
-		ray(P,N,1);
-	}
-
-	void ray(suffix *A, index num, unsigned depth)	{
-		while(num>1)	{
-			suffix *x,*z;
-			{
-				z = (x=A)+num;
-				suffix s = A[num>>1];
-				if(s<depth)	{
-					assert(s+1==depth);
-					const suffix t = A[num>>1] = A[num-1];
-					*--z=s; s=t; --num;
-				}
-				assert(s>=depth);
-				const T w = data[s-depth];
-				suffix *y = x;
-				for(;;)	{
-					s = *y;
-					if(s<depth)
-						goto more;
-					const T q = data[s-depth];
-					if(q <= w)	{
-						if(q != w) *y=*x,*x++=s;
-						if(++y == z) break;
-					}else	{
-						more:
-						if(--z == y) break;
-						*y=*z,*z=s;
-					}
-				}
-				y=z; z=A+num;
-				num = y-x;
+	void induce_2()	{
+		const index NL = N-1U;
+		// condition "(j-1U) >= NL" cuts off
+		// all 0-s and the N at once
+		index i;
+		suffix add;
+		assert(N);
+		//right2left
+		buckets();
+		P[--RE[data[0]]] = 1U + MASK_UP;
+		i=N; do	{
+			const suffix j = P[--i] & MASK_SUF;
+			if((j-1U) >= NL)
+				continue;
+			const T cur = data[j];
+			if(data[j-1U] >= cur)	{
+				add = 0;
+				if(data[j-1U] != cur || (P[i] & MASK_UP))
+					add = MASK_UP;
+				P[--RE[cur]] = j+1U + add;
 			}
-			ray(A,x-A,depth); A = x+num;
-			ray(A,z-A,depth); A = x;
-			++depth;
+		}while(i);
+		//left2right
+		buckets();
+		for(i=0; i!=N; ++i)	{
+			//todo: fix to support 1Gb input
+			const suffix j = P[i] & MASK_SUF;
+			if((j-1U) >= NL)
+				continue;
+			const T cur = data[j];
+			if(data[j-1U] <= cur)	{
+				add = 0;
+				if(data[j-1U] == cur && (P[i] & MASK_UP))
+					add = P[i] & MASK_UP;
+				else if(j+1U<N && cur>data[j+1U])
+					add = MASK_LMS;
+				P[R[cur]++] = j+1U + add;
+			}
 		}
 	}
 
 
+	void computeTargetLengths_2()	{
+		index i,j;	// using area of P[n1,N)
+		for(i=j=0;;)	{
+			while(++i<N && data[i-1U] >= data[i]);
+			while(++i<N && data[i-1U] <= data[i]);
+			if(i>=N)
+				break;
+			P[n1 + (i>>1)] = i-j;	//length
+			j = i;
+		}
+	}
+
 	void reduce_2()	{
-		assert(!"implemented");
-	}
+		index i,j;
+		// scatter LMS into bucket positions
+		memset( P, 0, N*sizeof(suffix) );
+		P[N] = 0 + MASK_UP;
+		buckets();
+		for(i=j=0; ; )	{
+			while(++i<N && data[i-1U] >= data[i]);
+			while(++i<N && data[i-1U] <= data[i]);
+			if(i>=N)
+				break;
+			assert( n1+j<N );
+			++n1; // found LMS!
+			P[R[data[i-1]]++] = i + MASK_LMS;
+		}
+		
+		// sort by induction (evil technology!)
+		assert(n1+n1<=N);
+		induce_2();
 
-	void reduce_3()	{
-	}
-
-	void induce_2()	{
-	}
-
-	void induce_3()	{
+		// scatter into indices and values
+		packTargetIndices();
+		memset( P+n1, 0, (N-n1)*sizeof(suffix) );
+		computeTargetLengths_2();
+		computeTargetValues();
+		packTargetValues();
 	}
 
 	void derive_2()	{
+		suffix *const s1 = P+N-n1;
+		index i,j;
+		// get the list of LMS strings
+		for(i=j=0; ; )	{
+			while(++i<N && data[i-1U] >= data[i]);
+			while(++i<N && data[i-1U] <= data[i]);
+			if(i>=N)
+				break;
+			assert( n1+j<N );
+			s1[j++] = i;
+		}
+		assert(j==n1);
+		// update the indices in the sorted array
+		// LMS index -> string index
+		for(i=0; i<n1; ++i)	{
+			j = P[i];
+			assert(j>0 && j<=n1);
+			P[i] = s1[j-1U];
+		}
+		// scatter LMS back into proper positions
+		buckets();
+		//option: generate buckets again here
+		// but make R2 static
+		memcpy( s1, P, n1*sizeof(suffix) );
+		memset( P, 0, (N-n1)*sizeof(suffix) );
+		T prev_sym = 0;
+		for(i=0; i!=n1; ++i)	{
+			j = s1[i]; s1[i] = 0;
+			assert(j>0 && j<=N				&& "Invalid suffix!");
+			assert(data[j-1U] >= prev_sym	&& "Not sorted!");
+			index *const pr = R+data[j-1U];
+			assert(pr[0] < pr[1]			&& "Stepped twice on the same suffix!");
+			assert(pr[0] <= N-n1+i			&& "Not sorted properly!");
+			P[pr[0]++] = j;
+		}
+		// induce the rest of suffixes
+		induce_2();
+		// clean up the masks (TEMPORARY!)
+		for(i=0; i!=N; ++i)
+			P[i] &= MASK_SUF;
 	}
 
-	void derive_3()	{
+	//---------------------------------
+	//	Strategy-3 implementation	//
+
+	void reduce_3()	{
+		assert(!"implemented");
 	}
+
+	void induce_3()	{
+		assert(!"implemented");
+	}
+	
+	void derive_3()	{
+		assert(!"implemented");
+	}
+
+	//---------------------------------
+	//	Main entry point	//
 
 public:
 	Constructor(T *const _data, suffix *const _P, const index _N, index *const _R, const index _K)
@@ -355,10 +515,12 @@ public:
 			reduce_2();
 			solve();
 			derive_2();
+			break;
 		case 3:
 			reduce_3();
 			solve();
 			derive_3();
+			break;
 		}
 		
 	}
