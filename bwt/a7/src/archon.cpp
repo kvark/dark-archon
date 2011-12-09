@@ -12,12 +12,12 @@ class BucketStorage	{
 		SIZE_RESERVED	= 0x1000,
 		SIZE_UNIT		= 0x100,
 	};
-	unsigned arr[SIZE_RESERVED], have;
+	index arr[SIZE_RESERVED], have;
 public:
 	void reset()	{
 		have = 0;
 	}
-	unsigned* obtain(const unsigned K)	{
+	index* obtain(const index K)	{
 		if (K<=SIZE_UNIT && have+K<=SIZE_RESERVED)	{
 			have += K;
 			return arr+have-K;
@@ -33,9 +33,9 @@ template<typename T>
 class	SaIs	{
 	T *const data;
 	suffix *const P;
-	unsigned *const R, *const RE, *const R2;
-	const unsigned N, K;
-	unsigned n1, name;
+	index *const R, *const RE, *const R2;
+	const index N, K;
+	index n1, name;
 	const int strategy;
 
 	enum {
@@ -51,8 +51,8 @@ class	SaIs	{
 	void checkData();
 
 	void makeBuckets()	{
-		memset( R, 0, K*sizeof(unsigned) );
-		unsigned i,sum;
+		memset( R, 0, K*sizeof(index) );
+		index i,sum;
 		for(i=0; i<N; ++i)
 			++R[data[i]];
 		for(R[i=K]=sum=N; i--;)
@@ -62,7 +62,7 @@ class	SaIs	{
 
 	void buckets()	{
 		if(R2)	{
-			memcpy( RE, R2, (K-1U)*sizeof(unsigned) );
+			memcpy( RE, R2, (K-1U)*sizeof(index) );
 			R[0] = 0; R[K] = N;
 		}else
 			makeBuckets();
@@ -73,10 +73,10 @@ class	SaIs	{
 	//todo: use buckets to traverse the SA efficiently
 	// if R2 is available
 	void induce()	{
-		const unsigned NL = N-1U;
+		const index NL = N-1U;
 		// condition "(j-1U) >= NL" cuts off
 		// all 0-s and the N at once
-		unsigned i;
+		index i;
 		suffix add;
 		assert(N);
 		//left2right
@@ -119,7 +119,7 @@ class	SaIs	{
 
 	void valueLMS()	{
 		// using area of P[n1,N)
-		unsigned i,j;
+		index i,j;
 		// find the length of each LMS substring
 		// and write it into P[n1+(x>>1)]
 		// no collisions guaranteed because LMS distance>=2
@@ -131,11 +131,11 @@ class	SaIs	{
 			while(++i<N && data[i-1] <= data[i]);
 		}
 		// compare LMS using known lengths
-		unsigned prev_len = 0;
+		index prev_len = 0;
 		suffix prev = 0;
 		for(name=0,i=0; i!=n1; ++i)	{
 			const suffix cur = P[i];
-			unsigned &cur_len = P[n1+(cur>>1)];
+			index &cur_len = P[n1+(cur>>1)];
 			assert(cur_len);
 			//todo: work around the jump
 			if(cur_len == prev_len)	{
@@ -153,7 +153,7 @@ class	SaIs	{
 	}
 
 	void reduce()	{
-		unsigned i,j;
+		index i,j;
 		// scatter LMS into bucket positions
 		memset( P, 0, N*sizeof(suffix) );
 		P[N] = 0 + MASK_UP;
@@ -208,14 +208,14 @@ class	SaIs	{
 		}else	{
 			// permute back from values into indices
 			assert(name == n1);
-			for(unsigned i=0; i<n1; ++i)
+			for(index i=0; i<n1; ++i)
 				P[s1[i]] = i+1U;
 		}
 	}
 
 	void goback()	{
 		suffix *const s1 = P+N-n1;
-		unsigned i,j;
+		index i,j;
 		// get the list of LMS strings
 		// LMS number -> actual string number
 		//note: going left to right here!
@@ -244,7 +244,7 @@ class	SaIs	{
 			j = P[i]; P[i] = 0;
 			assert(j>0 && j<=N				&& "Invalid suffix!");
 			assert(data[j-1U] <= prev_sym	&& "Not sorted!");
-			unsigned *const pr = RE+data[j-1U];
+			index *const pr = RE+data[j-1U];
 			P[--*pr] = j;
 			assert(pr[0] >= pr[-1]	&& "Stepped twice on the same suffix!");
 			assert(pr[0] >= i		&& "Not sorted properly!");
@@ -257,7 +257,7 @@ class	SaIs	{
 	}
 
 public:
-	SaIs(T *const _data, suffix *const _P, const unsigned _N, unsigned *const _R, const unsigned _K)
+	SaIs(T *const _data, suffix *const _P, const index _N, index *const _R, const index _K)
 	: data(_data), P(_P)
 	, R(_R), RE(_R+1), R2(sBuckets.obtain(_K-1))
 	, N(_N), K(_K), n1(0), name(0), strategy(decide())	{
@@ -265,7 +265,7 @@ public:
 		checkData();
 		if(R2)	{
 			makeBuckets();
-			memcpy( R2, RE, (K-1)*sizeof(unsigned) );
+			memcpy( R2, RE, (K-1)*sizeof(index) );
 		}
 		reduce();
 		solve();
@@ -275,10 +275,10 @@ public:
 
 template<>	void SaIs<byte>::checkData()	{
 	assert( K==0x100 );
-	assert( sizeof(sBuckets) >= K*sizeof(unsigned) );
+	assert( sizeof(sBuckets) >= K*sizeof(index) );
 }
 template<>	void SaIs<suffix>::checkData()	{
-	for(unsigned i=0; i<N; ++i)
+	for(index i=0; i<N; ++i)
 		assert(data[i]>=0 && data[i]<K);
 }
 
@@ -287,9 +287,9 @@ template<>	void SaIs<suffix>::checkData()	{
 
 //	INITIALIZATION	//
 
-Archon::Archon(const unsigned Nx)
+Archon::Archon(const index Nx)
 : P(new suffix[Nx+0x102])
-, R(new unsigned[((Nx>>9) ? (Nx>>1) : 0x100)+1])
+, R(new index[((Nx>>9) ? (Nx>>1) : 0x100)+1])
 , str(new byte[Nx+1])
 , Nmax(Nx), N(0), baseId(0) {
 	assert(P && R && str);
@@ -304,7 +304,7 @@ Archon::~Archon()	{
 
 //	ENCODING	//
 
-int Archon::en_read(FILE *const fx, unsigned ns)	{
+int Archon::en_read(FILE *const fx, index ns)	{
 	assert(ns>=0 && ns<=Nmax);
 	N = fread( str, 1, ns, fx );
 	return N;
@@ -318,7 +318,7 @@ int Archon::en_compute()	{
 
 int Archon::en_write(FILE *const fx)	{
 	baseId = N;
-	for(unsigned i=0; i!=N; ++i)	{
+	for(index i=0; i!=N; ++i)	{
 		suffix pos = P[i];
 		if(pos == N)	{
 			baseId = i;
@@ -327,36 +327,36 @@ int Archon::en_write(FILE *const fx)	{
 		fputc( str[pos], fx);
 	}
 	assert(baseId != N);
-	fwrite( &baseId, sizeof(unsigned), 1, fx);
+	fwrite( &baseId, sizeof(index), 1, fx);
 	return 0;
 }
 
 
 //	DECODING	//
 
-void Archon::roll(const unsigned i)	{
+void Archon::roll(const index i)	{
 	P[i] = R[str[i]]++;
 	assert(N==1 || i != P[i]);
 }
 
-int Archon::de_read(FILE *const fx, unsigned ns)	{
+int Archon::de_read(FILE *const fx, index ns)	{
 	en_read(fx,ns);
-	int ok = fread( &baseId, sizeof(unsigned), 1, fx );
+	int ok = fread( &baseId, sizeof(index), 1, fx );
 	assert(ok && baseId<N);
 	return N;
 }
 
 int Archon::de_compute()	{
-	unsigned i,k;
+	index i,k;
 	// compute buchet heads
-	memset( R, 0, 0x100*sizeof(unsigned) );
+	memset( R, 0, 0x100*sizeof(index) );
 	for(i=0; i!=N; ++i)
 		++R[str[i]];
 	for(k=N,i=0x100; i--;)
 		R[i] = (k-=R[i]);
 	// fill the jump table
 #	ifndef	NDEBUG
-	memset( P, 0, (N+1)*sizeof(unsigned) );
+	memset( P, 0, (N+1)*sizeof(index) );
 #	endif
 	for(i=0; i<baseId; i++)		roll(i);
 	for(i=baseId+1U; i<N; i++)	roll(i);
@@ -365,7 +365,7 @@ int Archon::de_compute()	{
 }
 
 int Archon::de_write(FILE *const fx)	{
-	unsigned i, k=baseId;
+	index i, k=baseId;
 	for(i=0; i!=N; ++i,k=P[k])
 		putc(str[k],fx);
 	assert( k==baseId );
