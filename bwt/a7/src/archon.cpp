@@ -30,7 +30,7 @@ public:
 //--------------------------------------------------------//
 
 template<typename T>
-class	SaIs	{
+class	Constructor	{
 	T *const data;
 	suffix *const P;
 	index *const R, *const RE, *const R2;
@@ -204,7 +204,7 @@ class	SaIs	{
 	void solve()	{
 		suffix *const s1 = P+N-n1;
 		if(name<n1)	{
-			SaIs<suffix>( s1, P, n1, R, name );
+			Constructor<suffix>( s1, P, n1, R, name );
 		}else	{
 			// permute back from values into indices
 			assert(name == n1);
@@ -257,7 +257,7 @@ class	SaIs	{
 	}
 
 public:
-	SaIs(T *const _data, suffix *const _P, const index _N, index *const _R, const index _K)
+	Constructor(T *const _data, suffix *const _P, const index _N, index *const _R, const index _K)
 	: data(_data), P(_P)
 	, R(_R), RE(_R+1), R2(sBuckets.obtain(_K-1))
 	, N(_N), K(_K), n1(0), name(0), strategy(decide())	{
@@ -273,11 +273,11 @@ public:
 	}
 };
 
-template<>	void SaIs<byte>::checkData()	{
+template<>	void Constructor<byte>::checkData()	{
 	assert( K==0x100 );
 	assert( sizeof(sBuckets) >= K*sizeof(index) );
 }
-template<>	void SaIs<suffix>::checkData()	{
+template<>	void Constructor<suffix>::checkData()	{
 	for(index i=0; i<N; ++i)
 		assert(data[i]>=0 && data[i]<K);
 }
@@ -312,7 +312,7 @@ int Archon::en_read(FILE *const fx, index ns)	{
 
 int Archon::en_compute()	{
 	sBuckets.reset();
-	SaIs<byte>( str, P, N, R, 256 );
+	Constructor<byte>( str, P, N, R, 256 );
 	return 0;
 }
 
