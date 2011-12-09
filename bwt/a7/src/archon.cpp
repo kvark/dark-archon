@@ -10,7 +10,7 @@
 class BucketStorage	{
 	enum	{
 		SIZE_RESERVED	= 0x1000,
-		SIZE_UNIT		= 0x100,
+		SIZE_UNIT		= 0x400,
 	};
 	index arr[SIZE_RESERVED], have;
 public:
@@ -45,7 +45,14 @@ class	Constructor	{
 	};
 
 	int decide() const	{
-		return 1;
+		index bins[4] = {0,1,0,0};
+		byte mask = 3U;
+		for(index i=1; 0 && i<N; ++i)	{
+			const int diff = (data[i-1]<<1) + (int)(mask&1) - (data[i]<<1);
+			mask = (mask<<1U) + (diff>0 ? 1U:0U);
+			++bins[mask&3U];
+		}
+		return 0;
 	}
 
 	void checkData();
@@ -68,11 +75,13 @@ class	Constructor	{
 			makeBuckets();
 	}
 
-	//todo: use templates to remove unnecessary checks
+	// here is the slowest part of the method!
+	//todo: use templates/separate function
+	// to remove unnecessary checks
 	// on the second call to the function
 	//todo: use buckets to traverse the SA efficiently
 	// if R2 is available
-	void induce()	{
+	void induce_1()	{
 		const index NL = N-1U;
 		// condition "(j-1U) >= NL" cuts off
 		// all 0-s and the N at once
@@ -152,7 +161,7 @@ class	Constructor	{
 		}
 	}
 
-	void reduce()	{
+	void reduce_1()	{
 		index i,j;
 		// scatter LMS into bucket positions
 		memset( P, 0, N*sizeof(suffix) );
@@ -176,7 +185,7 @@ class	Constructor	{
 		}
 		assert(n1+n1<=N);
 		// sort by induction (evil technology!)
-		induce();
+		induce_1();
 		// pack LMS into the first n1 suffixes
 		for(j=i=0; ;++i)	{
 			const suffix suf = P[i] & MASK_SUF;
@@ -213,7 +222,7 @@ class	Constructor	{
 		}
 	}
 
-	void goback()	{
+	void derive_1()	{
 		suffix *const s1 = P+N-n1;
 		index i,j;
 		// get the list of LMS strings
@@ -250,10 +259,76 @@ class	Constructor	{
 			assert(pr[0] >= i		&& "Not sorted properly!");
 		}
 		// induce the rest of suffixes
-		induce();
+		induce_1();
 		// clean up the masks (TEMPORARY!)
 		for(i=0; i!=N; ++i)
 			P[i] &= MASK_SUF;
+	}
+
+	//---------------------------------
+	//	Ternary Qsort	//
+
+	void directSort()	{
+		for(index i=0; i!=N; ++i)
+			P[i] = i+1;
+		ray(P,N,1);
+	}
+
+	void ray(suffix *A, index num, unsigned depth)	{
+		while(num>1)	{
+			suffix *x,*z;
+			{
+				z = (x=A)+num;
+				suffix s = A[num>>1];
+				if(s<depth)	{
+					assert(s+1==depth);
+					const suffix t = A[num>>1] = A[num-1];
+					*--z=s; s=t; --num;
+				}
+				assert(s>=depth);
+				const T w = data[s-depth];
+				suffix *y = x;
+				for(;;)	{
+					s = *y;
+					if(s<depth)
+						goto more;
+					const T q = data[s-depth];
+					if(q <= w)	{
+						if(q != w) *y=*x,*x++=s;
+						if(++y == z) break;
+					}else	{
+						more:
+						if(--z == y) break;
+						*y=*z,*z=s;
+					}
+				}
+				y=z; z=A+num;
+				num = y-x;
+			}
+			ray(A,x-A,depth); A = x+num;
+			ray(A,z-A,depth); A = x;
+			++depth;
+		}
+	}
+
+
+	void reduce_2()	{
+		assert(!"implemented");
+	}
+
+	void reduce_3()	{
+	}
+
+	void induce_2()	{
+	}
+
+	void induce_3()	{
+	}
+
+	void derive_2()	{
+	}
+
+	void derive_3()	{
 	}
 
 public:
@@ -267,9 +342,25 @@ public:
 			makeBuckets();
 			memcpy( R2, RE, (K-1)*sizeof(index) );
 		}
-		reduce();
-		solve();
-		goback();
+		switch(strategy)	{
+		case 0:
+			directSort();
+			break;
+		case 1:
+			reduce_1();
+			solve();
+			derive_1();
+			break;
+		case 2:
+			reduce_2();
+			solve();
+			derive_2();
+		case 3:
+			reduce_3();
+			solve();
+			derive_3();
+		}
+		
 	}
 };
 
