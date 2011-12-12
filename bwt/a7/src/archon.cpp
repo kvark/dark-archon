@@ -160,7 +160,9 @@ class	Constructor	{
 				suffix s = A[num>>1];
 				if(s<depth)	{
 					assert(s+1==depth);
-					const suffix t = A[num>>1] = A[num-1];
+					if(num==2)
+						return;
+					const suffix t = A[num>>1] = A[0];
 					*--z=s; s=t; --num;
 				}
 				assert(s>=depth);
@@ -173,7 +175,8 @@ class	Constructor	{
 					const T q = data[s-depth];
 					if(q <= w)	{
 						if(q != w) *y=*x,*x++=s;
-						if(++y == z) break;
+						if(++y == z)
+							break;
 					}else	{
 						more:
 						if(--z == y) break;
@@ -187,6 +190,19 @@ class	Constructor	{
 			ray(A,z-A,depth); A = x;
 			++depth;
 		}
+	}
+
+	void sufCompare(const suffix a, const suffix b)	{
+		assert(a!=b);
+		index d=0; do ++d;
+		while(a>=d && b>=d && data[a-d]==data[b-d]);
+		assert(a>=d && (b<d || data[a-d]<data[b-d]));
+	}
+
+	bool bruteCheck(suffix *const A, suffix *const B)	{
+		for(suffix *x=A; ++x<B; )
+			sufCompare( x[-1], x[0] );
+		return true;
 	}
 
 	//---------------------------------
@@ -482,7 +498,7 @@ class	Constructor	{
 	byte *bitSet;	//temporary bit array
 
 	byte isBit(const suffix i)	{
-		return i<0 ? 1 : ( bitSet[i>>3] & (1<<(i&7)) );
+		return (int)i<0 ? 1 : ((bitSet[i>>3] >> (i&7)) & 1);
 	}
 	void setBit(const suffix i)	{
 		bitSet[i>>3] |= 1<<(i&7);
@@ -498,77 +514,97 @@ class	Constructor	{
 		for(i=1; i!=N; ++i)	{
 			if(prev>data[i] || (prev==data[i] && isBit(i-1)))
 				setBit(i);
+			prev = data[i];
 		}
-		//1. calculate 2-nd order frequencies
+		//1: calculate 2-nd order frequencies
 		index ra[0x10000], rb[0x10000], rx[0x10001];
-		memset( ra, 0, sizeof(ra) );
+		memset( rx, 0, sizeof(ra) );
 		prev = 0xFF;	// beware of the terminator
 		for(i=0; i!=N; ++i)	{
 			++rx[(data[i]<<8)+prev];
 			prev = data[i];
 		}
-		//2. count 2-nd order bucket starts and ends
+		//2: count 2-nd order bucket starts and ends
 		index sum = rx[i=0x10000] = N;
 		while(i--)		{
 			rb[i] = sum;
 			sum -= rx[i];
 			ra[i] = rx[i] = sum;
 		}
-		//3. fill in the 00 and 11 groups
+		//3: fill in the 00 and 11 groups
+		memset( P, 0, N*sizeof(suffix) );
 		typedef unsigned short word;
 		for(i=0; i!=N; ++i)	{
 			if(isBit(i-1) == isBit(i))	{
-				if(isBit(i))	{
-					word suf = (data[i]<<8) + (i?data[i-1]:0xFF);
-					P[--rb[suf]] = i;
-				}else	{
-					word suf = (data[i]<<8) + data[i-1];
-					P[ra[suf]++] = i;
-				}
+				const word pair = (data[i]<<8) + (i?data[i-1]:0xFF);
+				if(isBit(i))
+					P[--rb[pair]] = i+1;
+				else
+					P[ra[pair]++] = i+1;
 			}
 		}
-		//4. sort them
+		for(i=0; i!=0x100; ++i)	{
+			const word pair = i*0x101;
+			assert(ra[pair] == rb[pair]);
+		}
+		//4: sort them
 		for(i=0; i!=0x10000; ++i)	{
-			ray(P+rx[i], ra[i+0]-rx[i], 2);
-			ray(P+rb[i], ra[i+1]-rb[i], 2);
+			ray( P+rx[i], ra[i]-rx[i], 2 );
+			int num = rx[i+1]-rb[i];
+			if(i == (data[0]<<8)+0xFF)
+				--num;
+			ray( P+rb[i], num, 2 );
+			// check the result
+			bruteCheck( P+rx[i], P+ra[i+0] );
+			bruteCheck( P+rb[i], P+rx[i+1] );
 		}
-		//5. 00 -> [00,01(01)] && [1(0),1(01)]
+		//5: 00 -> [00,01(01)] && [1(0),1(01)]
+		bool ok;
+		ok = true;
+		while(ok)	{
+			ok = false;
+			for(i=0; i!=0x10000; ++i)	{
+				for(index k=rx[i]; k!=ra[i]; ++k)	{
+					suffix s = P[k];
+					while(s<N && isBit(s-1) != isBit(s))	{
+						const word pair = (data[s]<<8) + (s?data[s-1]:0xFF);
+						assert( ra[pair] < rb[pair] );
+						P[ra[pair]++] = ++s;
+						if(ra[pair]>rx[pair]+1)
+							sufCompare( P[ra[pair]-2], s );
+						ok = true;
+						//if(pair>=i)
+							break;
+					}
+				}
+			}
+		}
+		//6: 11 -> [10(10),11] && [0(10),0(1)]
+		ok = true;
+		while(ok)	{
+			ok = false;
+			for(i=0x10000; i--;)	{
+				for(index k=rx[i+1]; k--!=rb[i]; )	{
+					suffix s = P[k];
+					while(s<N && isBit(s-1) != isBit(s))	{
+						const word pair = (data[s]<<8) + (s?data[s-1]:0xFF);
+						assert( ra[pair] < rb[pair] );
+						P[--rb[pair]] = ++s;
+						if(rb[pair]+1<rx[pair+1])
+							sufCompare( s, P[rb[pair]+1] );
+						ok = true;
+						//if(pair<=i)
+							break;
+					}
+				}
+			}
+		}
 		for(i=0; i!=0x10000; ++i)	{
-			for(index k=rx[i]; k!=ra[i]; ++k)	{
-				const suffix s = P[k];
-				if(s<N && isBit(s+1))	{
-					const word pair = (data[s+1]<<8) + data[s];
-					assert( ra[pair] < rb[pair] );
-					P[ra[pair]++] = s+1;
-				}
-				if(s+1<N && !isBit(s+1) && isBit(s+2))	{
-					const word pair = (data[s+2]<<8) + data[s+1];
-					assert( ra[pair] < rb[pair] );
-					P[ra[pair]++] = s+1;
-				}
-			}
-		}
-		//6. 11 -> [10(10),11] && [0(10),0(1)]
-		for(i=0x10000; i--;)	{
-			for(index k=rx[i+1]; k--!=rb[i]; )	{
-				const suffix s = P[k];
-				if(s<N && !isBit(s+1))	{
-					const word pair = (data[s+1]<<8) + data[s];
-					assert( ra[pair] < rb[pair] );
-					P[--rb[pair]] = s+1;
-				}
-				if(s+1<N && isBit(s+1) && !isBit(s+2))	{
-					const word pair = (data[s+2]<<8) + data[s+1];
-					assert( ra[pair] < rb[pair] );
-					P[--rb[pair]] = s+1;
-				}
-			}
-		}
-		for(i=0; i!=0x10000; ++i)
 			assert(ra[i] == rb[i]);
-		//done!
+		}
+		// done!
 		delete[] bitSet;
-		assert(!"implemented");
+		bruteCheck( P, P+N );
 	}
 
 	void induce_3()	{
