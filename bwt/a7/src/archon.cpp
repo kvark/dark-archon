@@ -54,7 +54,7 @@ class	Constructor	{
 			mask = (mask<<1U) + (diff>0 ? 1U:0U);
 			++bins[mask&3U];
 		}
-		return 2;
+		return 3;
 	}
 
 	void checkData();
@@ -477,7 +477,46 @@ class	Constructor	{
 	//---------------------------------
 	//	Strategy-3 implementation	//
 
+	byte *bitSet;	//temporary bit array
+
+	byte isBit(const suffix i)	{
+		return ( bitSet[i>>3] & (1<<(i&7)) );
+	}
+	void setBit(const suffix i)	{
+		bitSet[i>>3] |= 1<<(i&7);
+	}
+
 	void reduce_3()	{
+		index ra[0x10000], rb[0x10000];
+		index i; T prev;
+		assert(K<=0x100);
+		//0. fill in the bit array (for development only)
+		bitSet = new byte[(N>>3)+1];
+		memset( bitSet, 0, (N>>3)+1 );
+		setBit(0); prev = data[0];
+		for(i=1; i!=N; ++i)	{
+			if(prev>data[i] || (prev==data[i] && isBit(i-1)))
+				setBit(i);
+		}
+		//1. calculate 2-nd order frequencies
+		memset( ra, 0, sizeof(ra) );
+		prev = 0xFF;	// beware of the terminator
+		for(i=0; i!=N; ++i)	{
+			++ra[(data[i]<<8)+prev];
+			prev = data[i];
+		}
+		//2. count 2-nd order bucket starts and ends
+		index sum = N;
+		for(i=0x10000; i--;)		{
+			rb[i] = sum;
+			ra[i] = (sum -= ra[i]);
+		}
+		//3. fill in the 00 and 11 groups
+		//4. sort them
+		//5. 00 -> [00,01(01)] && [1(0),1(01)]
+		//6. 11 -> [10(10),11] && [0(10),0(1)]
+		//done!
+		delete[] bitSet;
 		assert(!"implemented");
 	}
 
@@ -516,8 +555,8 @@ public:
 			derive_2();
 		}else if(strategy==3)	{
 			reduce_3();
-			solve();
-			derive_3();
+			//solve();
+			//derive_3();
 		}else assert(!"a strategy");
 	}
 };
