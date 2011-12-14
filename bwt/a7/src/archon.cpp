@@ -73,96 +73,6 @@ class	Constructor	{
 	};
 
 	//---------------------------------
-	//	Commonly used routines	//
-
-	void checkData()	{
-		for(index i=0; i<N; ++i)
-			assert(data[i]>=0 && data[i]<K);
-	}
-
-	bool checkUnique(const index num)	{
-		for(index i=0; i!=num; ++i)
-			for(index j=i+1; j!=num; ++j)
-				if(P[i]==P[j])
-					return false;
-		return true;
-	}
-
-	//todo: combine this pass with the decision function
-	// and skip bucket sorting for the first time after
-	void makeBuckets()	{
-		memset( R, 0, K*sizeof(index) );
-		index i,sum;
-		for(i=0; i<N; ++i)
-			++R[data[i]];
-		for(R[i=K]=sum=N; i--;)
-			R[i] = (sum -= R[i]);
-		assert(!sum);
-	}
-
-	void buckets()	{
-		if(R2)	{
-			memcpy( RE, R2, (K-1U)*sizeof(index) );
-			R[0] = 0; R[K] = N;
-		}else
-			makeBuckets();
-	}
-
-	void packTargetIndices()	{
-		index i,j;
-		// pack LMS into the first n1 suffixes
-		if(!n1)
-			return;
-		for(j=i=0; ;++i)	{
-			const suffix suf = P[i] & MASK_SUF;
-			assert(suf>0 && i<N);
-			if(P[i] & MASK_LMS)	{
-				P[j] = suf;
-				if(++j == n1)
-					break;
-			}
-		}
-	}
-
-	void computeTargetValues()	{
-		// compare LMS using known lengths
-		index i, prev_len = 0;
-		suffix prev = 0;
-		for(name=0,i=0; i!=n1; ++i)	{
-			const suffix cur = P[i];
-			index &cur_len = P[n1+(cur>>1)];
-			assert(cur_len);
-			//todo: work around the jump
-			if(cur_len == prev_len)	{
-				index j=1; do	{
-					if(data[cur-j] != data[prev-j])
-						goto greater;
-				}while(++j <= cur_len);
-			}else	{
-				greater:	//warning!
-				++name; prev = cur;
-				prev_len = cur_len;
-			}
-			cur_len = name;
-		}
-	}
-
-	void packTargetValues()	{
-		index i,j;
-		if(!n1)
-			return;
-		// pack values into the last n1 suffixes
-		for(i=N,j=N; ;)		{
-			assert( i>n1 );
-			if(P[--i])	{
-				P[--j] = P[i]-1U;
-				if(j == N-n1)
-					break;
-			}
-		}
-	}
-
-	//---------------------------------
 	//	Strategy-0 implementation	//
 
 	void directSort()	{
@@ -225,6 +135,98 @@ class	Constructor	{
 	}
 
 	//---------------------------------
+	//	Commonly used routines	//
+
+	void checkData()	{
+		for(index i=0; i<N; ++i)
+			assert(data[i]>=0 && data[i]<K);
+	}
+
+	bool checkUnique(const index num)	{
+		for(index i=0; i!=num; ++i)
+			for(index j=i+1; j!=num; ++j)
+				if(P[i]==P[j])
+					return false;
+		return true;
+	}
+
+	void makeBuckets()	{
+		memset( R, 0, K*sizeof(index) );
+		index i,sum;
+		for(i=0; i<N; ++i)
+			++R[data[i]];
+		for(R[i=K]=sum=N; i--;)
+			R[i] = (sum -= R[i]);
+		assert(!sum);
+	}
+
+	void buckets()	{
+		if(R2)	{
+			memcpy( RE, R2, (K-1U)*sizeof(index) );
+			R[0] = 0; R[K] = N;
+		}else
+			makeBuckets();
+	}
+
+	void packTargetIndices()	{
+		index i,j;
+		// pack LMS into the first n1 suffixes
+		if(!n1)
+			return;
+		for(j=i=0; ;++i)	{
+			const suffix suf = P[i] & MASK_SUF;
+			assert(suf>0 && i<N);
+			if(P[i] & MASK_LMS)	{
+				P[j] = suf;
+				if(++j == n1)
+					break;
+			}
+		}
+	}
+
+	void computeTargetValues()	{
+		// compare LMS using known lengths
+		suffix *const s1 = P+n1+1;
+		index i, prev_len = 0;
+		suffix prev = 0;
+		for(name=0,i=0; i!=n1; ++i)	{
+			const suffix cur = P[i];
+			index &cur_len = s1[cur>>1];
+			assert(cur_len);
+			//todo: work around the jump
+			if(cur_len == prev_len)	{
+				index j=1; do	{
+					if(data[cur-j] != data[prev-j])
+						goto greater;
+				}while(++j <= cur_len);
+			}else	{
+				greater:	//warning!
+				++name; prev = cur;
+				prev_len = cur_len;
+			}
+			cur_len = name;
+		}
+	}
+
+	void packTargetValues()	{
+		if(!n1)
+			return;
+		// pack values into [0,n1] and
+		// move suffixes into [n1,2*n1]
+		suffix *const s1 = P+n1, *x=s1;
+		for(index j=0; ;++x)		{
+			const suffix val = *x;
+			assert( x<P+N );
+			if(val)	{
+				s1[j] = P[j];
+				P[j] = val-1U;
+				if(++j == n1)
+					break;
+			}
+		}
+	}
+
+	//---------------------------------
 	//	Strategy-1 implementation	//
 
 	// here is the slowest part of the method!
@@ -279,6 +281,7 @@ class	Constructor	{
 	}
 
 	void computeTargetLengths_1()	{
+		suffix *const s1 = P+n1+1;
 		index i=0,j=0;	// using area of P[n1,N)
 		// find the length of each LMS substring
 		// and write it into P[n1+(x>>1)]
@@ -286,7 +289,7 @@ class	Constructor	{
 		while(++i<N)	{
 			if(data[i-1] >= data[i])	
 				continue;
-			P[n1 + (i>>1)] = i-j;	//length
+			s1[i>>1] = i-j;	//length
 			j = i;
 			while(++i<N && data[i-1] <= data[i]);
 		}
@@ -317,7 +320,6 @@ class	Constructor	{
 		}
 
 		// sort by induction (evil technology!)
-		assert(n1+n1<=N);
 		induce_1();
 
 		// scatter into indices and values
@@ -328,39 +330,43 @@ class	Constructor	{
 		packTargetValues();
 	}
 
-	void solve()	{
-		suffix *const s1 = P+N-n1;
+	void solve(const index reserve)	{
 		if(name<n1)	{
-			Constructor<suffix>( s1, P, n1, R, name );
+			assert(n1+n1<N);
+			Constructor<suffix>( P, P+n1, n1, name, reserve+N-n1 );
 		}else	{
 			// permute back from values into indices
 			assert(name == n1);
-			for(index i=0; i<n1; ++i)
-				P[s1[i]] = i+1U;
+			for(index i=n1; i--; )
+				P[n1+P[i]] = i+1U;
 		}
 	}
 
 	void derive_1()	{
-		suffix *const s1 = P+N-n1;
 		index i,j;
 		// get the list of LMS strings
 		// LMS number -> actual string number
 		//note: going left to right here!
-		for(i=0,j=0; ++i<N; )	{
-			if(data[i-1U] >= data[i])	
-				continue;
-			assert( n1+j<N );
-			s1[j++] = i;
-			while(++i<N && data[i-1U] <= data[i]);
+		for(i=0,j=0; ; )	{
+			do	{ ++i;
+				assert(i<N);
+			}while(data[i-1U] >= data[i]);
+			P[j] = i;
+			if(++j==n1)
+				break;
+			do	{ ++i;
+				assert(i<N);
+			}while(data[i-1U] <= data[i]);
 		}
-		assert(j==n1);
+		suffix *const s1 = P+n1;
 		// update the indices in the sorted array
 		// LMS index -> string index
 		for(i=0; i<n1; ++i)	{
-			j = P[i];
+			j = s1[i];
 			assert(j>0 && j<=n1);
-			P[i] = s1[j-1U];
+			s1[i] = P[j-1U];
 		}
+		memcpy( P, P+n1, n1*sizeof(suffix) );
 		// scatter LMS back into proper positions
 		buckets();
 		//option: generate buckets again here
@@ -387,11 +393,11 @@ class	Constructor	{
 	//	Main entry point	//
 
 public:
-	Constructor(T *const _data, suffix *const _P, const index _N, index *const _R, const index _K)
+	Constructor(T *const _data, suffix *const _P, const index _N, const index _K, const index reserved)
 	: data(_data), P(_P)
-	, R(_R), RE(_R+1), R2(sBuckets.obtain(_K-1))
+	, R(_P+_N+1), RE(R+1), R2(sBuckets.obtain(_K-1))
 	, N(_N), K(_K), n1(0), name(0)	{
-		assert( N<=MASK_SUF );
+		assert( N<=MASK_SUF && K<reserved );
 		checkData();
 		if(R2)	{
 			makeBuckets();
@@ -399,7 +405,7 @@ public:
 		}
 		// directSort();
 		reduce_1();
-		solve();
+		solve(reserved);
 		derive_1();
 	}
 };
@@ -417,10 +423,16 @@ template<>	void Constructor<dbyte>::checkData()	{
 
 //	INITIALIZATION	//
 
+index Archon::estimateReserve(const index n)	{
+	return n>>1;
+}
+
 Archon::Archon(const index Nx)
-: P(new suffix[Nx+(Nx>>1)+0x102])
-, str(new byte[Nx+1])
-, Nmax(Nx), N(0), baseId(0) {
+: Nmax(Nx)
+, Nreserve(estimateReserve(Nx)+0x101)
+, P(new suffix[Nmax+1+Nreserve])
+, str(new byte[Nmax+1])
+, N(0), baseId(0) {
 	assert(P && str);
 }
 
@@ -440,7 +452,7 @@ int Archon::en_read(FILE *const fx, index ns)	{
 
 int Archon::en_compute()	{
 	sBuckets.reset();
-	Constructor<byte>( str, P, N, P+N+1, 0x100 );
+	Constructor<byte>( str, P, N, 0x100, Nreserve );
 	return 0;
 }
 

@@ -6,13 +6,14 @@ typedef unsigned long	word;
 
 
 class Archon	{
+	const index Nmax, Nreserve;
 	suffix *const P;
 	byte *const str;
-	const index Nmax;
 	index N, baseId;
 	void roll(const index i);
 
 public:
+	static index estimateReserve(const index);
 	Archon(const index N);
 	~Archon();
 	// encoding
