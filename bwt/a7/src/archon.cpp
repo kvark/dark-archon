@@ -56,10 +56,13 @@ class	Constructor	{
 			mask = (mask<<1U) + (diff>0 ? 1U:0U);
 			++bins[mask&3U];
 		}
-		return 3;
+		return 1;
 	}
 
-	void checkData();
+	void checkData()	{
+		for(index i=0; i<N; ++i)
+			assert(data[i]>=0 && data[i]<K);
+	}
 
 	bool checkUnique(const index num)	{
 		for(index i=0; i!=num; ++i)
@@ -192,16 +195,16 @@ class	Constructor	{
 		}
 	}
 
-	void sufCompare(const suffix a, const suffix b)	{
+	bool sufCompare(const suffix a, const suffix b)	{
 		assert(a!=b);
 		index d=0; do ++d;
 		while(a>=d && b>=d && data[a-d]==data[b-d]);
-		assert(a>=d && (b<d || data[a-d]<data[b-d]));
+		return a>=d && (b<d || data[a-d]<data[b-d]);
 	}
 
 	bool bruteCheck(suffix *const A, suffix *const B)	{
 		for(suffix *x=A; ++x<B; )
-			sufCompare( x[-1], x[0] );
+			assert(sufCompare( x[-1], x[0] ));
 		return true;
 	}
 
@@ -505,105 +508,40 @@ class	Constructor	{
 	}
 
 	void reduce_3()	{
-		index i; T prev;
-		assert(K<=0x100);
-		//0. fill in the bit array (for development only)
-		bitSet = new byte[(N>>3)+1];
-		memset( bitSet, 0, (N>>3)+1 );
-		setBit(0); prev = data[0];
-		for(i=1; i!=N; ++i)	{
-			if(prev>data[i] || (prev==data[i] && isBit(i-1)))
-				setBit(i);
-			prev = data[i];
+		index *const Rx = new index[0x10001];
+		n1 = N-(N>>1);
+		suffix *const s1 = P+n1;
+		Constructor<dbyte>( reinterpret_cast<dbyte*>(data), s1, N>>1, Rx, 0x10000 );
+		delete[] Rx;
+		memset( R, 0, K*sizeof(index) );
+		suffix *const P2 = new suffix[n1];
+		index i,sum;
+		for(i=0; i<N; i+=2)
+			++R[data[i]];
+		for(i=0x100,sum=n1; i--;)
+			R[i] = (sum-=R[i]);
+		for(i=0; i!=(N>>1); ++i)	{
+			const suffix s = s1[i]*2;
+			if(s==N)
+				continue;
+			P2[R[data[s]]++] = s+1;
 		}
-		//1: calculate 2-nd order frequencies
-		index ra[0x10000], rb[0x10000], rx[0x10001];
-		memset( rx, 0, sizeof(ra) );
-		prev = 0xFF;	// beware of the terminator
+		P2[R[data[0]]] = 1;
+		//merge!
+		index a=0,b=0;
 		for(i=0; i!=N; ++i)	{
-			++rx[(data[i]<<8)+prev];
-			prev = data[i];
+			if(a!=N>>1)	{
+				if(b!=n1)	{
+					if(sufCompare(s1[a]*2,P2[b]))
+						P[i] = s1[a++]*2;
+					else
+						P[i] = P2[b++];
+				}else
+					P[i] = s1[a++]*2;
+			}else
+				P[i] = P2[b++];
 		}
-		//2: count 2-nd order bucket starts and ends
-		index sum = rx[i=0x10000] = N;
-		while(i--)		{
-			rb[i] = sum;
-			sum -= rx[i];
-			ra[i] = rx[i] = sum;
-		}
-		//3: fill in the 00 and 11 groups
-		memset( P, 0, N*sizeof(suffix) );
-		typedef unsigned short word;
-		for(i=0; i!=N; ++i)	{
-			if(isBit(i-1) == isBit(i))	{
-				const word pair = (data[i]<<8) + (i?data[i-1]:0xFF);
-				if(isBit(i))
-					P[--rb[pair]] = i+1;
-				else
-					P[ra[pair]++] = i+1;
-			}
-		}
-		for(i=0; i!=0x100; ++i)	{
-			const word pair = i*0x101;
-			assert(ra[pair] == rb[pair]);
-		}
-		//4: sort them
-		for(i=0; i!=0x10000; ++i)	{
-			ray( P+rx[i], ra[i]-rx[i], 2 );
-			int num = rx[i+1]-rb[i];
-			if(i == (data[0]<<8)+0xFF)
-				--num;
-			ray( P+rb[i], num, 2 );
-			// check the result
-			bruteCheck( P+rx[i], P+ra[i+0] );
-			bruteCheck( P+rb[i], P+rx[i+1] );
-		}
-		//5: 00 -> [00,01(01)] && [1(0),1(01)]
-		bool ok;
-		ok = true;
-		while(ok)	{
-			ok = false;
-			for(i=0; i!=0x10000; ++i)	{
-				for(index k=rx[i]; k!=ra[i]; ++k)	{
-					suffix s = P[k];
-					while(s<N && isBit(s-1) != isBit(s))	{
-						const word pair = (data[s]<<8) + (s?data[s-1]:0xFF);
-						assert( ra[pair] < rb[pair] );
-						P[ra[pair]++] = ++s;
-						if(ra[pair]>rx[pair]+1)
-							sufCompare( P[ra[pair]-2], s );
-						ok = true;
-						//if(pair>=i)
-							break;
-					}
-				}
-			}
-		}
-		//6: 11 -> [10(10),11] && [0(10),0(1)]
-		ok = true;
-		while(ok)	{
-			ok = false;
-			for(i=0x10000; i--;)	{
-				for(index k=rx[i+1]; k--!=rb[i]; )	{
-					suffix s = P[k];
-					while(s<N && isBit(s-1) != isBit(s))	{
-						const word pair = (data[s]<<8) + (s?data[s-1]:0xFF);
-						assert( ra[pair] < rb[pair] );
-						P[--rb[pair]] = ++s;
-						if(rb[pair]+1<rx[pair+1])
-							sufCompare( s, P[rb[pair]+1] );
-						ok = true;
-						//if(pair<=i)
-							break;
-					}
-				}
-			}
-		}
-		for(i=0; i!=0x10000; ++i)	{
-			assert(ra[i] == rb[i]);
-		}
-		// done!
-		delete[] bitSet;
+		delete[] P2;
 		bruteCheck( P, P+N );
 	}
 
@@ -648,13 +586,16 @@ public:
 	}
 };
 
+template<> int Constructor<byte>::decide() const	{
+	return 3;
+}
+
 template<>	void Constructor<byte>::checkData()	{
 	assert( K==0x100 );
 	assert( sizeof(sBuckets)/sizeof(index) > K );
 }
-template<>	void Constructor<suffix>::checkData()	{
-	for(index i=0; i<N; ++i)
-		assert(data[i]>=0 && data[i]<K);
+template<>	void Constructor<dbyte>::checkData()	{
+	assert( K==0x10000 );
 }
 
 
@@ -687,7 +628,7 @@ int Archon::en_read(FILE *const fx, index ns)	{
 
 int Archon::en_compute()	{
 	sBuckets.reset();
-	Constructor<byte>( str, P, N, R, 256 );
+	Constructor<byte>( str, P, N, R, 0x100 );
 	return 0;
 }
 

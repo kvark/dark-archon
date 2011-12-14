@@ -1,7 +1,8 @@
 typedef	unsigned int	suffix;
 typedef	unsigned int	index;
 typedef unsigned char	byte;
-typedef unsigned long	dword;
+typedef unsigned short	dbyte;
+typedef unsigned long	word;
 
 
 class Archon	{
