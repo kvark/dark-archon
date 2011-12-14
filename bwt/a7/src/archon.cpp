@@ -35,8 +35,11 @@ public:
 		memcpy( data, &v, SIZE );
 		return *this;
 	}
+	Key(const unsigned &v)	{
+		*this = v;
+	}
 	operator unsigned() const	{
-		return *reinterpret_cast<unsigned*>(data) & ((1<<(SIZE*8))-1);
+		return *reinterpret_cast<const unsigned*>(data) & ((1<<(SIZE*8))-1);
 	}
 };
 
@@ -53,6 +56,13 @@ template<> Key<4>& Key<4>::operator=(const unsigned v)	{
 	return *this;
 }
 
+template<> Key<1>::operator unsigned() const	{
+	return data[0];
+}
+template<> Key<2>::operator unsigned() const	{
+	return *reinterpret_cast<const dbyte*>(data);
+}
+
 
 //--------------------------------------------------------//
 // This SAC implementation is derived from ideas explained here:
@@ -60,7 +70,7 @@ template<> Key<4>& Key<4>::operator=(const unsigned v)	{
 
 template<typename T>
 class	Constructor	{
-	T *const data;
+	const T *const data;
 	suffix *const P;
 	index *const R, *const RE, *const R2;
 	const index N, K;
@@ -284,7 +294,7 @@ class	Constructor	{
 		suffix *const s1 = P+n1+1;
 		index i=0,j=0;	// using area of P[n1,N)
 		// find the length of each LMS substring
-		// and write it into P[n1+(x>>1)]
+		// and write it into P[n1+1+(x>>1)]
 		// no collisions guaranteed because LMS distance>=2
 		while(++i<N)	{
 			if(data[i-1] >= data[i])	
@@ -393,7 +403,7 @@ class	Constructor	{
 	//	Main entry point	//
 
 public:
-	Constructor(T *const _data, suffix *const _P, const index _N, const index _K, const index reserved)
+	Constructor(const T *const _data, suffix *const _P, const index _N, const index _K, const index reserved)
 	: data(_data), P(_P)
 	, R(_P+_N+1), RE(R+1), R2(sBuckets.obtain(_K-1))
 	, N(_N), K(_K), n1(0), name(0)	{
@@ -456,7 +466,9 @@ int Archon::en_read(FILE *const fx, index ns)	{
 
 int Archon::en_compute()	{
 	sBuckets.reset();
-	Constructor<byte>( str, P, N, 0x100, Nreserve );
+	//Constructor<byte>( str, P, N, 0x100, Nreserve );
+	const Key<1> *const input = reinterpret_cast<const Key<1>*>(str);
+	Constructor< Key<1> >(input,P,N,0x100,Nreserve);
 	return 0;
 }
 
