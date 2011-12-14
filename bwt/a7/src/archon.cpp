@@ -27,6 +27,33 @@ public:
 }static sBuckets;
 
 
+template<int SIZE>
+class Key	{
+	byte data[SIZE];
+public:
+	Key& operator=(const unsigned v)	{
+		memcpy( data, &v, SIZE );
+		return *this;
+	}
+	operator unsigned() const	{
+		return *reinterpret_cast<unsigned*>(data) & ((1<<(SIZE*8))-1);
+	}
+};
+
+template<> Key<1>& Key<1>::operator=(const unsigned v)	{
+	data[0] = v;
+	return *this;
+}
+template<> Key<2>& Key<2>::operator=(const unsigned v)	{
+	*reinterpret_cast<dbyte*>(data) = v;
+	return *this;
+}
+template<> Key<4>& Key<4>::operator=(const unsigned v)	{
+	*reinterpret_cast<word*>(data) = v;
+	return *this;
+}
+
+
 //--------------------------------------------------------//
 // This SAC implementation is derived from ideas explained here:
 // http://www.cs.sysu.edu.cn/nong/index.files/Two%20Efficient%20Algorithms%20for%20Linear%20Suffix%20Array%20Construction.pdf
