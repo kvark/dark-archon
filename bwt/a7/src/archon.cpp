@@ -75,17 +75,6 @@ class	Constructor	{
 	//---------------------------------
 	//	Commonly used routines	//
 
-	int decide() const	{
-		index bins[4] = {0,1,0,0};
-		byte mask = 3U;
-		for(index i=1; 0 && i<N; ++i)	{
-			const int diff = (data[i-1]<<1) + (int)(mask&1) - (data[i]<<1);
-			mask = (mask<<1U) + (diff>0 ? 1U:0U);
-			++bins[mask&3U];
-		}
-		return 1;
-	}
-
 	void checkData()	{
 		for(index i=0; i<N; ++i)
 			assert(data[i]>=0 && data[i]<K);
@@ -395,185 +384,6 @@ class	Constructor	{
 	}
 
 	//---------------------------------
-	//	Strategy-2 implementation	//
-
-	void induce_2()	{
-		const index NL = N-1U;
-		// condition "(j-1U) >= NL" cuts off
-		// all 0-s and the N at once
-		index i;
-		suffix add;
-		assert(N);
-		//right2left
-		buckets();
-		P[--RE[data[0]]] = 1U + MASK_UP;
-		i=N; do	{
-			const suffix j = P[--i] & MASK_SUF;
-			if((j-1U) >= NL)
-				continue;
-			const T cur = data[j];
-			if(data[j-1U] >= cur)	{
-				add = 0;
-				if(data[j-1U] != cur || (P[i] & MASK_UP))
-					add = MASK_UP;
-				P[--RE[cur]] = j+1U + add;
-			}
-		}while(i);
-		//left2right
-		buckets();
-		for(i=0; i!=N; ++i)	{
-			//todo: fix to support 1Gb input
-			const suffix j = P[i] & MASK_SUF;
-			if((j-1U) >= NL)
-				continue;
-			const T cur = data[j];
-			if(data[j-1U] <= cur)	{
-				add = 0;
-				if(data[j-1U] == cur && (P[i] & MASK_UP))
-					add = P[i] & MASK_UP;
-				else if(j+1U<N && cur>data[j+1U])
-					add = MASK_LMS;
-				P[R[cur]++] = j+1U + add;
-			}
-		}
-	}
-
-
-	void computeTargetLengths_2()	{
-		index i,j;	// using area of P[n1,N)
-		for(i=j=0;;)	{
-			while(++i<N && data[i-1U] >= data[i]);
-			while(++i<N && data[i-1U] <= data[i]);
-			if(i>=N)
-				break;
-			P[n1 + (i>>1)] = i-j;	//length
-			j = i;
-		}
-	}
-
-	void reduce_2()	{
-		index i,j;
-		// scatter LMS into bucket positions
-		memset( P, 0, N*sizeof(suffix) );
-		P[N] = 0 + MASK_UP;
-		buckets();
-		for(i=j=0; ; )	{
-			while(++i<N && data[i-1U] >= data[i]);
-			while(++i<N && data[i-1U] <= data[i]);
-			if(i>=N)
-				break;
-			assert( n1+j<N );
-			++n1; // found LMS!
-			P[R[data[i-1]]++] = i + MASK_LMS;
-		}
-		
-		// sort by induction (evil technology!)
-		assert(n1+n1<=N);
-		induce_2();
-
-		// scatter into indices and values
-		packTargetIndices();
-		memset( P+n1, 0, (N-n1)*sizeof(suffix) );
-		computeTargetLengths_2();
-		computeTargetValues();
-		packTargetValues();
-	}
-
-	void derive_2()	{
-		suffix *const s1 = P+N-n1;
-		index i,j;
-		// get the list of LMS strings
-		for(i=j=0; ; )	{
-			while(++i<N && data[i-1U] >= data[i]);
-			while(++i<N && data[i-1U] <= data[i]);
-			if(i>=N)
-				break;
-			assert( n1+j<N );
-			s1[j++] = i;
-		}
-		assert(j==n1);
-		// update the indices in the sorted array
-		// LMS index -> string index
-		for(i=0; i<n1; ++i)	{
-			j = P[i];
-			assert(j>0 && j<=n1);
-			P[i] = s1[j-1U];
-		}
-		// scatter LMS back into proper positions
-		buckets();
-		//option: generate buckets again here
-		// but make R2 static
-		memcpy( s1, P, n1*sizeof(suffix) );
-		memset( P, 0, (N-n1)*sizeof(suffix) );
-		T prev_sym = 0;
-		for(i=0; i!=n1; ++i)	{
-			j = s1[i]; s1[i] = 0;
-			assert(j>0 && j<=N				&& "Invalid suffix!");
-			assert(data[j-1U] >= prev_sym	&& "Not sorted!");
-			index *const pr = R+data[j-1U];
-			assert(pr[0] < pr[1]			&& "Stepped twice on the same suffix!");
-			assert(pr[0] <= N-n1+i			&& "Not sorted properly!");
-			P[pr[0]++] = j;
-		}
-		// induce the rest of suffixes
-		induce_2();
-		// clean up the masks (TEMPORARY!)
-		for(i=0; i!=N; ++i)
-			P[i] &= MASK_SUF;
-	}
-
-	//---------------------------------
-	//	Strategy-3 implementation	//
-
-	void reduce_3()	{
-		n1 = N-(N>>1);
-		suffix *const s1 = P+n1;
-		const bool bNeedAlloc = n1<0x10001;
-		index *const Rx = (bNeedAlloc ? new index[0x10001] : (index*)P);
-		Constructor<dbyte>( reinterpret_cast<dbyte*>(data), s1, N>>1, Rx, 0x10000 );
-		if(bNeedAlloc)
-			delete[] Rx;
-		memset( R, 0, K*sizeof(index) );
-		suffix *const P2 = new suffix[n1];
-		index i,sum;
-		for(i=0; i<N; i+=2)
-			++R[data[i]];
-		for(i=0x100,sum=n1; i--;)
-			R[i] = (sum-=R[i]);
-		for(i=0; i!=(N>>1); ++i)	{
-			const suffix s = s1[i]*2;
-			if(s==N)
-				continue;
-			P2[R[data[s]]++] = s+1;
-		}
-		P2[R[data[0]]] = 1;
-		//merge!
-		index a=0,b=0;
-		for(i=0; i!=N; ++i)	{
-			if(a!=N>>1)	{
-				if(b!=n1)	{
-					if(sufCompare(s1[a]*2,P2[b]))
-						P[i] = s1[a++]*2;
-					else
-						P[i] = P2[b++];
-				}else
-					P[i] = s1[a++]*2;
-			}else
-				P[i] = P2[b++];
-		}
-		delete[] P2;
-		bruteCheck( P, P+N );
-	}
-
-	void induce_3()	{
-		assert(!"implemented");
-	}
-	
-	void derive_3()	{
-		assert(!"implemented");
-	}
-
-	//---------------------------------
 	//	Main entry point	//
 
 public:
@@ -587,28 +397,12 @@ public:
 			makeBuckets();
 			memcpy( R2, RE, (K-1)*sizeof(index) );
 		}
-		const int strategy = decide();
-		if(!strategy)	{
-			directSort();
-		}else if(strategy==1)	{
-			reduce_1();
-			solve();
-			derive_1();
-		}else if(strategy==2)	{
-			reduce_2();
-			solve();
-			derive_2();
-		}else if(strategy==3)	{
-			reduce_3();
-			//solve();
-			//derive_3();
-		}else assert(!"a strategy");
+		// directSort();
+		reduce_1();
+		solve();
+		derive_1();
 	}
 };
-
-template<> int Constructor<byte>::decide() const	{
-	return 3;
-}
 
 template<>	void Constructor<byte>::checkData()	{
 	assert( K==0x100 );
@@ -624,17 +418,14 @@ template<>	void Constructor<dbyte>::checkData()	{
 //	INITIALIZATION	//
 
 Archon::Archon(const index Nx)
-: P(new suffix[Nx+0x102])
-//, R(new index[((Nx>>9) ? (Nx>>1) : 0x100)+1])
-, R(new index[0x101])
+: P(new suffix[Nx+(Nx>>1)+0x102])
 , str(new byte[Nx+1])
 , Nmax(Nx), N(0), baseId(0) {
-	assert(P && R && str);
+	assert(P && str);
 }
 
 Archon::~Archon()	{
 	delete[] P;
-	delete[] R;
 	delete[] str;
 }
 
@@ -649,7 +440,7 @@ int Archon::en_read(FILE *const fx, index ns)	{
 
 int Archon::en_compute()	{
 	sBuckets.reset();
-	Constructor<byte>( str, P, N, R, 0x100 );
+	Constructor<byte>( str, P, N, P+N+1, 0x100 );
 	return 0;
 }
 
@@ -672,7 +463,7 @@ int Archon::en_write(FILE *const fx)	{
 //	DECODING	//
 
 void Archon::roll(const index i)	{
-	P[i] = R[str[i]]++;
+	P[i] = P[N+str[i]]++;
 	assert(N==1 || i != P[i]);
 }
 
@@ -686,6 +477,7 @@ int Archon::de_read(FILE *const fx, index ns)	{
 int Archon::de_compute()	{
 	index i,k;
 	// compute buchet heads
+	index *const R = P+N;
 	memset( R, 0, 0x100*sizeof(index) );
 	for(i=0; i!=N; ++i)
 		++R[str[i]];
