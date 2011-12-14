@@ -441,6 +441,10 @@ Archon::~Archon()	{
 	delete[] str;
 }
 
+unsigned Archon::countMemory() const	{
+	return Nmax + (Nmax+1+Nreserve)*sizeof(suffix);
+}
+
 
 //	ENCODING	//
 
