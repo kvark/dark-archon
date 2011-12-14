@@ -4,8 +4,12 @@
 
 #include "archon.h"
 
-//	Memory requirements:		7n
-//	Execution time complexity:	O(n)
+
+//--------------------------------------------------------//
+//	Bucket Storage class manages a small chunk of memory
+//	to be used by small buckets
+//option: use reserved area for that automatically!
+//--------------------------------------------------------//
 
 class BucketStorage	{
 	enum	{
@@ -27,8 +31,14 @@ public:
 }static sBuckets;
 
 
+//--------------------------------------------------------//
+//	Universal data key class, used as SAC input
+//--------------------------------------------------------//
+static const unsigned sKeyMask = 7;
+
 template<int SIZE>
 class Key	{
+	enum { MASK = (2<<(SIZE*8-1))-1 };
 	byte data[SIZE];
 public:
 	Key& operator=(const unsigned v)	{
@@ -39,16 +49,24 @@ public:
 		*this = v;
 	}
 	operator unsigned() const	{
-		return *reinterpret_cast<const unsigned*>(data) & ((1<<(SIZE*8))-1);
+		return *reinterpret_cast<const unsigned*>(data) & MASK;
 	}
 };
 
 template<> Key<1>& Key<1>::operator=(const unsigned v)	{
+	assert(!(v>>8));
 	data[0] = v;
 	return *this;
 }
 template<> Key<2>& Key<2>::operator=(const unsigned v)	{
+	assert(!(v>>16));
 	*reinterpret_cast<dbyte*>(data) = v;
+	return *this;
+}
+template<> Key<3>& Key<3>::operator=(const unsigned v)	{
+	assert(!(v>>24));
+	data[0]=data[1]=data[2]=0;
+	*reinterpret_cast<unsigned*>(data) += v & MASK;
 	return *this;
 }
 template<> Key<4>& Key<4>::operator=(const unsigned v)	{
@@ -67,6 +85,7 @@ template<> Key<2>::operator unsigned() const	{
 //--------------------------------------------------------//
 // This SAC implementation is derived from ideas explained here:
 // http://www.cs.sysu.edu.cn/nong/index.files/Two%20Efficient%20Algorithms%20for%20Linear%20Suffix%20Array%20Construction.pdf
+//--------------------------------------------------------//
 
 template<typename T>
 class	Constructor	{
@@ -218,24 +237,6 @@ class	Constructor	{
 		}
 	}
 
-	void packTargetValues()	{
-		if(!n1)
-			return;
-		// pack values into [0,n1] and
-		// move suffixes into [n1,2*n1]
-		suffix *const s1 = P+n1, *x=s1;
-		for(index j=0; ;++x)		{
-			const suffix val = *x;
-			assert( x<P+N );
-			if(val)	{
-				s1[j] = P[j];
-				P[j] = val-1U;
-				if(++j == n1)
-					break;
-			}
-		}
-	}
-
 	//---------------------------------
 	//	Strategy-1 implementation	//
 
@@ -337,18 +338,40 @@ class	Constructor	{
 		memset( P+n1, 0, (N-n1)*sizeof(suffix) );
 		computeTargetLengths_1();
 		computeTargetValues();
-		packTargetValues();
 	}
 
+	template<int KS>
+	void packTargetValues(Key<KS> *const input)	{
+		if(!n1)
+			return;
+		// pack values into [0,n1] and
+		// move suffixes into [n1,2*n1]
+		suffix *const s1 = P+n1, *x=s1;
+		for(index j=0; ;++x)		{
+			const suffix val = *x;
+			assert( x<P+N );
+			if(val)	{
+				s1[j] = P[j];
+				input[j] = val-1U;
+				if(++j == n1)
+					break;
+			}
+		}
+	}
+
+	template<int KS>
 	void solve(const index reserve)	{
+		typedef Key<KS> XKey;
+		XKey *const input = reinterpret_cast<XKey*>(P);
+		packTargetValues(input);
 		if(name<n1)	{
 			assert(n1+n1<N);
-			Constructor<suffix>( P, P+n1, n1, name, reserve+N-n1 );
+			Constructor<XKey>( input, P+n1, n1, name, reserve+N-n1 );
 		}else	{
 			// permute back from values into indices
 			assert(name == n1);
 			for(index i=n1; i--; )
-				P[n1+P[i]] = i+1U;
+				P[n1+input[i]] = i+1U;
 		}
 	}
 
@@ -414,8 +437,20 @@ public:
 			memcpy( R2, RE, (K-1)*sizeof(index) );
 		}
 		// directSort();
+		// reduce the problem to LMS sorting
 		reduce_1();
-		solve(reserved);
+		// solve the reduced problem
+		if(!name)
+			return;
+		else if(name<=0x100		&& (sKeyMask&0x1))
+			solve<1>(reserved);
+		else if(name<=0x10000	&& (sKeyMask&0x2))
+			solve<2>(reserved);
+		else if(name<=0x1000000	&& (sKeyMask&0x4))
+			solve<3>(reserved);
+		else
+			solve<4>(reserved);
+		// derive all other suffixes
 		derive_1();
 	}
 };
@@ -466,9 +501,9 @@ int Archon::en_read(FILE *const fx, index ns)	{
 
 int Archon::en_compute()	{
 	sBuckets.reset();
-	//Constructor<byte>( str, P, N, 0x100, Nreserve );
-	const Key<1> *const input = reinterpret_cast<const Key<1>*>(str);
-	Constructor< Key<1> >(input,P,N,0x100,Nreserve);
+	Constructor<byte>( str, P, N, 0x100, Nreserve );
+	//const Key<1> *const input = reinterpret_cast<const Key<1>*>(str);
+	//Constructor< Key<1> >( input, P, N, 0x100, Nreserve );
 	return 0;
 }
 
