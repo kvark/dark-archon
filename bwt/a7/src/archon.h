@@ -16,6 +16,7 @@ public:
 	static index estimateReserve(const index);
 	Archon(const index N);
 	~Archon();
+	unsigned countMemory() const;
 	// encoding
 	int en_read(FILE *const fx, index ns);
 	int en_compute();

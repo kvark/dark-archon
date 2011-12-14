@@ -25,9 +25,13 @@ int main(const int argc, const char *const argv[])	{
 		return -2;
 	fseek(fx,0,SEEK_END);
 	int N = ftell(fx);
+	if(!N)
+		return -3;
+	Archon ar(N);
+	const unsigned mem = ar.countMemory();
+	printf("Allocated %dmb or %.1fn\n", mem>>20, mem*1.f/N );
 	fseek(fx,0,SEEK_SET);
 	if(mode)	{
-		Archon ar(N);
 		printf("Reading raw...\n");
 		ar.en_read(fx,N);
 		fclose(fx);
@@ -44,7 +48,6 @@ int main(const int argc, const char *const argv[])	{
 		N -= sizeof(int);
 		if(N<=0)
 			return -2;
-		Archon ar(N);
 		printf("Reading BWT...\n");
 		ar.de_read(fx,N);
 		fclose(fx);
