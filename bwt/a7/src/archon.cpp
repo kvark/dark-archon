@@ -498,21 +498,14 @@ class	Constructor	{
 	//---------------------------------
 	//	Strategy-3 implementation	//
 
-	byte *bitSet;	//temporary bit array
-
-	byte isBit(const suffix i)	{
-		return (int)i<0 ? 1 : ((bitSet[i>>3] >> (i&7)) & 1);
-	}
-	void setBit(const suffix i)	{
-		bitSet[i>>3] |= 1<<(i&7);
-	}
-
 	void reduce_3()	{
-		index *const Rx = new index[0x10001];
 		n1 = N-(N>>1);
 		suffix *const s1 = P+n1;
+		const bool bNeedAlloc = n1<0x10001;
+		index *const Rx = (bNeedAlloc ? new index[0x10001] : (index*)P);
 		Constructor<dbyte>( reinterpret_cast<dbyte*>(data), s1, N>>1, Rx, 0x10000 );
-		delete[] Rx;
+		if(bNeedAlloc)
+			delete[] Rx;
 		memset( R, 0, K*sizeof(index) );
 		suffix *const P2 = new suffix[n1];
 		index i,sum;
@@ -605,7 +598,8 @@ template<>	void Constructor<dbyte>::checkData()	{
 
 Archon::Archon(const index Nx)
 : P(new suffix[Nx+0x102])
-, R(new index[((Nx>>9) ? (Nx>>1) : 0x100)+1])
+//, R(new index[((Nx>>9) ? (Nx>>1) : 0x100)+1])
+, R(new index[0x101])
 , str(new byte[Nx+1])
 , Nmax(Nx), N(0), baseId(0) {
 	assert(P && R && str);
