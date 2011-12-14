@@ -7,7 +7,6 @@ typedef unsigned long	word;
 
 class Archon	{
 	suffix *const P;
-	index *const R;
 	byte *const str;
 	const index Nmax;
 	index N, baseId;
