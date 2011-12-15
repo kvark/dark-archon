@@ -167,42 +167,63 @@ class	Constructor	{
 	//---------------------------------
 	//	Strategy-1 implementation	//
 
+	struct Xpre	{
+		inline suffix operator()(const suffix &s)	{
+			return ~s;
+		}
+	};
+	struct Xpost	{
+		inline suffix operator()(const suffix &s)	{
+			return s;
+		}
+	};
+
 	// here is the slowest part of the method!
-	//todo: use templates/separate function
-	// to remove unnecessary checks
-	// on the second call to the function
 	//todo: use buckets to traverse the SA efficiently
 	// if R2 is available
-	void induce_1()	{
+	template<class Accessor>
+	void induce_uni()	{
+		Accessor x;
 		const t_index NL = N-1U;
 		t_index i;
 		assert(N);
 		//left2right
 		buckets();
 		for(i=0; i!=N; ++i)	{
-			//todo: fix to support 1Gb input
-			const suffix s = ~P[i];
+			const suffix s = x(P[i]);
 			if(static_cast<t_index>(s-1) >= NL)
 				continue;
+#			ifdef INDUCE_ALT
+			t_index &pr = R[data[s]];
+			if(pr>i)	{
+				P[pr++] = x(s+1);
+#			else
 			const T cur = data[s];
 			if(data[s-1] <= cur)		{
-				assert(R[cur] < RE[cur]);
-				P[R[cur]++] = ~(s+1);
+				P[R[cur]++] = x(s+1);
+#			endif
+				assert(R[data[s]] <= RE[data[s]]);
 				P[i] = s;	//clear mask
 			}
 		}
 		//right2left
 		buckets();
-		P[--RE[data[0]]] = ~1;
+		P[--RE[data[0]]] = x(1);
 		i=N; do	{
-			const suffix s = ~P[--i];
+			const suffix s = x(P[--i]);
 			if(static_cast<t_index>(s-1) >= NL)
 				continue;
+#			ifdef INDUCE_ALT
+			t_index &pr = RE[data[s]];
+			if(pr<=i)		{
+				P[--pr] = x(s+1);
+#			else
 			const T cur = data[s];
 			if(data[s-1] >= cur)		{
-				assert(RE[cur] > R[cur]);
-				P[--RE[cur]] = ~(s+1);
-				P[i] = s;	//set mask
+				P[--RE[cur]] = x(s+1);
+#			endif
+				assert(R[data[s]] <= RE[data[s]]);
+				P[i] = s;	//clear mask
 			}
 		}while(i);
 	}
@@ -250,7 +271,7 @@ class	Constructor	{
 		}
 
 		// sort by induction (evil technology!)
-		induce_1();
+		induce_uni<Xpre>();
 
 		// scatter into indices and values
 		packTargetIndices();
@@ -338,17 +359,12 @@ class	Constructor	{
 			assert(j>0 && j<=N				&& "Invalid suffix!");
 			assert(data[j-1]	<= prev_sym		&& "Not sorted!");
 			t_index *const pr = RE+data[j-1];
-			P[--*pr] = ~j;
+			P[--*pr] = j;
 			assert(pr[0] >= pr[-1]	&& "Stepped twice on the same suffix!");
 			assert(pr[0] >= i		&& "Not sorted properly!");
 		}
 		// induce the rest of suffixes
-		induce_1();
-		// clean up the masks (TEMPORARY!)
-		for(i=0; i!=N; ++i)	{
-			if(P[i]<0)
-				P[i] = ~P[i];
-		}
+		induce_uni<Xpost>();
 	}
 
 	//---------------------------------
