@@ -20,8 +20,8 @@ class	Constructor	{
 	const	index N;		// input length
 	const	index K;		// number of unique values
 	index	n1;				// number of LMS
-	index	d1;				// 
-	index	name;
+	index	d1;				// memory units occupied by the new data
+	index	name;			// new number of unique values
 
 	enum {
 		MASK_LMS	= 1U<<31U,
