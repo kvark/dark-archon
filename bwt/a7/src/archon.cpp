@@ -6,32 +6,6 @@
 
 
 //--------------------------------------------------------//
-//	Bucket Storage class manages a small chunk of memory
-//	to be used by small buckets
-//option: use reserved area for that automatically!
-//--------------------------------------------------------//
-
-class BucketStorage	{
-	enum	{
-		SIZE_RESERVED	= 0x1000,
-		SIZE_UNIT		= 0x400,
-	};
-	index arr[SIZE_RESERVED], have;
-public:
-	void reset()	{
-		have = 0;
-	}
-	index* obtain(const index K)	{
-		if (K<=SIZE_UNIT && have+K<=SIZE_RESERVED)	{
-			have += K;
-			return arr+have-K;
-		}
-		return NULL;
-	}
-}static sBuckets;
-
-
-//--------------------------------------------------------//
 //	Universal data key class, used as SAC input
 //--------------------------------------------------------//
 static const unsigned sKeyMask = 7;
@@ -369,8 +343,7 @@ class	Constructor	{
 		Q *const input = reinterpret_cast<Q*>(P);
 		packTargetValues(input);
 		if(name<n1)	{
-			assert(n1+n1<N);
-			Constructor<Q>( input, P+n1, n1, name, reserve+N-n1 );
+			Constructor<Q>( input, P+n1, n1, name, reserve );
 		}else	{
 			// permute back from values into indices
 			assert(name == n1);
@@ -431,29 +404,36 @@ class	Constructor	{
 
 public:
 	Constructor(const T *const _data, suffix *const _P, const index _N, const index _K, const index reserved)
-	: data(_data), P(_P)
-	, R(_P+_N+1), RE(R+1), R2(sBuckets.obtain(_K-1))
+	: data(_data), P(_P), R(_P+_N+1), RE(R+1)
+	, R2(reserved>=_K*2 ? _P+_N+2+reserved-_K : NULL)
 	, N(_N), K(_K), n1(0), name(0)	{
 		assert( N<=MASK_SUF && K<reserved );
 		checkData();
+		index left = reserved;
 		if(R2)	{
+			assert(R2 >= R+K+1);
 			makeBuckets();
 			memcpy( R2, RE, (K-1)*sizeof(index) );
+			assert( left >= K-1 );
+			left -= K-1;
 		}
 		// directSort();
 		// reduce the problem to LMS sorting
 		reduce_1();
+		assert( n1+n1<=N );
+		left += N-2*n1;
+		assert( P+n1+n1+1+left + (R2?K-1:0) == P+N+1+reserved );
 		// solve the reduced problem
 		if(!name)
 			return;
 		else if(name<=0x100		&& (sKeyMask&0x1))
-			solve<byte>(reserved);
+			solve<byte>(left);
 		else if(name<=0x10000	&& (sKeyMask&0x2))
-			solve<dbyte>(reserved);
+			solve<dbyte>(left);
 		else if(name<=0x1000000	&& (sKeyMask&0x4))
-			solve< Key<3> >(reserved);
+			solve< Key<3> >(left);
 		else	// this never happens
-			solve<unsigned>(reserved);
+			solve<unsigned>(left);
 		// derive all other suffixes
 		derive_1();
 	}
@@ -466,7 +446,7 @@ public:
 
 index Archon::estimateReserve(const index n)	{
 	const int need = 0x10001 - ((sKeyMask&4) ? n/12 : 0);
-	return need>0x101 ? need : 0x101;
+	return need>0x200 ? need : 0x200;
 }
 
 Archon::Archon(const index Nx)
@@ -497,8 +477,7 @@ int Archon::en_read(FILE *const fx, index ns)	{
 }
 
 int Archon::en_compute()	{
-	sBuckets.reset();
-	Constructor<byte>( str, P, N, 0x100, Nreserve );
+	Constructor<byte>( str, P, N, 0x100, Nmax-N+Nreserve );
 	//const Key<1> *const input = reinterpret_cast<const Key<1>*>(str);
 	//Constructor< Key<1> >( input, P, N, 0x100, Nreserve );
 	return 0;
