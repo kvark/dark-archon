@@ -23,12 +23,6 @@ class	Constructor	{
 	index	d1;				// memory units occupied by the new data
 	index	name;			// new number of unique values
 
-	enum {
-		MASK_LMS	= 1U<<31U,
-		MASK_UP		= 1U<<30U,
-		MASK_SUF	= MASK_UP-1U,
-	};
-
 	//---------------------------------
 	//	Strategy-0 implementation	//
 
@@ -137,10 +131,10 @@ class	Constructor	{
 		if(!n1)
 			return;
 		for(j=i=0; ;++i)	{
-			const suffix suf = P[i] & MASK_SUF;
-			assert(suf>0 && i<N);
-			if((P[i] & MASK_LMS) && suf!=N)	{
-				P[j] = suf;
+			assert(i<N);
+			const suffix s = ~P[i];
+			if(s>=0 && s!=N)	{
+				P[j] = s;
 				if(++j == n1)
 					break;
 			}
@@ -154,11 +148,11 @@ class	Constructor	{
 		suffix prev = 0;
 		for(name=0,i=0; i!=n1; ++i)	{
 			const suffix cur = P[i];
-			index &cur_len = s1[cur>>1];
+			suffix &cur_len = s1[cur>>1];
 			assert(cur_len);
 			//todo: work around the jump
 			if(cur_len == prev_len)	{
-				index j=1; do	{
+				suffix j=1; do	{
 					if(data[cur-j] != data[prev-j])
 						goto greater;
 				}while(++j <= cur_len);
@@ -181,48 +175,34 @@ class	Constructor	{
 	//todo: use buckets to traverse the SA efficiently
 	// if R2 is available
 	void induce_1()	{
-		const index NL = N-1U;
-		// condition "(j-1U) >= NL" cuts off
-		// all 0-s and the N at once
 		index i;
-		suffix add;
 		assert(N);
 		//left2right
 		buckets();
 		for(i=0; i!=N; ++i)	{
 			//todo: fix to support 1Gb input
-			const suffix j = P[i] & MASK_SUF;
-			if((j-1U) >= NL || !(P[i]&MASK_LMS))
+			const suffix s = ~P[i];
+			if(s<=0 || s==N)
 				continue;
-			const T cur = data[j];
-			if(data[j-1U] <= cur)	{
-				add = MASK_LMS;
-				if(0 && data[j-1U] == cur)
-					add = P[i] & MASK_UP;	
-				P[R[cur]++] = j+1U+add;
-				P[i] = j;	//clear mask
+			const T cur = data[s];
+			if(data[s-1] <= cur)	{
+				assert(R[cur] < RE[cur]);
+				P[R[cur]++] = ~(s+1);
+				P[i] = s;	//clear mask
 			}
 		}
 		//right2left
 		buckets();
-		add = MASK_LMS;
-		//if(N>1 && data[0]<data[1])
-		//	add += MASK_LMS;
-		P[--RE[data[0]]] = 1U+add;
+		P[--RE[data[0]]] = ~1;
 		i=N; do	{
-			const suffix j = P[--i] & MASK_SUF;
-			if((j-1U) >= NL || !(P[i]&MASK_LMS))
+			const suffix s = ~P[--i];
+			if(s<=0 || s==N)
 				continue;
-			const T cur = data[j];
-			if(data[j-1U] >= cur)	{
-				add = MASK_LMS;
-				if(0 && data[j-1U] != cur || (P[i] & MASK_UP))	{
-					add = MASK_UP;
-					if(j+1U<N && cur<data[j+1U])
-						add += MASK_LMS;
-				}
-				P[--RE[cur]] = j+1U+add;
-				P[i] = j;	//set mask
+			const T cur = data[s];
+			if(data[s-1] >= cur)		{
+				assert(RE[cur] > R[cur]);
+				P[--RE[cur]] = ~(s+1);
+				P[i] = s;	//set mask
 			}
 		}while(i);
 	}
@@ -250,13 +230,12 @@ class	Constructor	{
 	void reduce_1()	{
 		assert(!n1 && N);
 		// scatter LMS into bucket positions
-		memset( P, 0, N*sizeof(suffix) );
-		P[N] = 0 + MASK_UP;
+		memset( P, 0, (N+1)*sizeof(suffix) );
 		buckets();
 		//todo: optimize more
 		bool prevUp = true;
 		for(index j=N;;)	{
-			index i=j-1;
+			index i = j-1;
 			while(--j && data[j-1U]==data[i]);
 			if(j && data[j-1U]<data[i])	{
 				prevUp = false;
@@ -264,8 +243,7 @@ class	Constructor	{
 			}//up
 			if(!prevUp)	{ // found LMS!
 				++n1; prevUp = true; 
-				const suffix s = i+1U + MASK_LMS + MASK_UP;
-				P[--RE[data[i]]] = s;
+				P[--RE[data[i]]] = ~(i+1);
 			}
 			if(!j)
 				break;
@@ -322,7 +300,7 @@ class	Constructor	{
 			// permute back from values into indices
 			assert(name == n1);
 			for(index i=n1; i--; )
-				P[d1+input[i]] = i+1U;
+				P[d1+input[i]] = i+1;
 		}
 	}
 
@@ -335,19 +313,19 @@ class	Constructor	{
 		//note: going left to right here!
 		for(i=0,j=0; ; )	{
 			do	{ ++i; assert(i<N);
-			}while(data[i-1U] >= data[i]);
+			}while(data[i-1] >= data[i]);
 			s1[j] = i;
 			if(++j==n1)
 				break;
 			do	{ ++i; assert(i<N);
-			}while(data[i-1U] <= data[i]);
+			}while(data[i-1] <= data[i]);
 		}
 		// update the indices in the sorted array
 		// LMS index -> string index
 		for(i=0; i<n1; ++i)	{
 			j = P[i];
 			assert(j>0 && j<=n1);
-			P[i] = s1[j-1U];
+			P[i] = s1[j-1];
 		}
 		// scatter LMS back into proper positions
 		buckets();
@@ -358,17 +336,19 @@ class	Constructor	{
 		for(i=n1; i--; )	{
 			j = P[i]; P[i] = 0;
 			assert(j>0 && j<=N				&& "Invalid suffix!");
-			assert(data[j-1U] <= prev_sym	&& "Not sorted!");
-			index *const pr = RE+data[j-1U];
-			P[--*pr] = j + MASK_LMS;
+			assert(data[j-1]	<= prev_sym		&& "Not sorted!");
+			index *const pr = RE+data[j-1];
+			P[--*pr] = ~j;
 			assert(pr[0] >= pr[-1]	&& "Stepped twice on the same suffix!");
 			assert(pr[0] >= i		&& "Not sorted properly!");
 		}
 		// induce the rest of suffixes
 		induce_1();
 		// clean up the masks (TEMPORARY!)
-		for(i=0; i!=N; ++i)
-			P[i] &= MASK_SUF;
+		for(i=0; i!=N; ++i)	{
+			if(P[i]<0)
+				P[i] = ~P[i];
+		}
 	}
 
 	//---------------------------------
@@ -376,10 +356,10 @@ class	Constructor	{
 
 public:
 	Constructor(const T *const _data, suffix *const _P, const index _N, const index _K, const index reserved)
-	: data(_data), P(_P), R(_P+_N+1), RE(R+1)
-	, R2(reserved>=_K*2 ? _P+_N+2+reserved-_K : NULL)
+	: data(_data), P(_P), R(reinterpret_cast<index*>(_P+_N+1)), RE(R+1)
+	, R2(reserved>=_K*2 ? reinterpret_cast<index*>(_P+_N+2+reserved-_K) : NULL)
 	, N(_N), K(_K), n1(0), d1(0), name(0)	{
-		assert( N<=MASK_SUF && K<reserved );
+		assert( N>0 && K<reserved );
 		checkData();
 		if(R2)	{
 			assert(R2 >= R+K+1);
@@ -477,7 +457,7 @@ int Archon::de_read(FILE *const fx, index ns)	{
 int Archon::de_compute()	{
 	index i,k;
 	// compute buchet heads
-	index *const R = P+N;
+	index *const R = reinterpret_cast<index*>(P+N);
 	assert( N+0x101 <= Nmax+1+Nreserve );
 	memset( R, 0, 0x100*sizeof(index) );
 	for(i=0; i!=N; ++i)
