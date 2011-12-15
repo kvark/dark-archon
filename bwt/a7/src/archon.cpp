@@ -6,57 +6,6 @@
 
 
 //--------------------------------------------------------//
-//	Universal data key class, used as SAC input
-//--------------------------------------------------------//
-static const unsigned sKeyMask = 6;
-
-template<int SIZE>
-class Key	{
-	enum { MASK = (2<<(SIZE*8-1))-1 };
-	byte data[SIZE];
-public:
-	Key& operator=(const unsigned v)	{
-		memcpy( data, &v, SIZE );
-		return *this;
-	}
-	Key(const unsigned &v)	{
-		*this = v;
-	}
-	operator unsigned() const	{
-		return *reinterpret_cast<const unsigned*>(data) & MASK;
-	}
-};
-
-template<> Key<1>& Key<1>::operator=(const unsigned v)	{
-	assert(!(v>>8));
-	data[0] = v;
-	return *this;
-}
-template<> Key<2>& Key<2>::operator=(const unsigned v)	{
-	assert(!(v>>16));
-	*reinterpret_cast<dbyte*>(data) = v;
-	return *this;
-}
-template<> Key<3>& Key<3>::operator=(const unsigned v)	{
-	assert(!(v>>24));
-	*reinterpret_cast<dbyte*>(data) = v&(0xFFFF);
-	data[2] = v>>16;
-	return *this;
-}
-template<> Key<4>& Key<4>::operator=(const unsigned v)	{
-	*reinterpret_cast<word*>(data) = v;
-	return *this;
-}
-
-template<> Key<1>::operator unsigned() const	{
-	return data[0];
-}
-template<> Key<2>::operator unsigned() const	{
-	return *reinterpret_cast<const dbyte*>(data);
-}
-
-
-//--------------------------------------------------------//
 // This SAC implementation is derived from ideas explained here:
 // http://www.cs.sysu.edu.cn/nong/index.files/Two%20Efficient%20Algorithms%20for%20Linear%20Suffix%20Array%20Construction.pdf
 //--------------------------------------------------------//
@@ -437,13 +386,11 @@ public:
 		// solve the reduced problem
 		if(!name)
 			return;
-		else if(name<=0x100		&& (sKeyMask&0x1))
+		else if(name<=0x100)
 			solve<byte>(reserved);
-		else if(name<=0x10000	&& (sKeyMask&0x2))
+		else if(name<=0x10000)
 			solve<dbyte>(reserved);
-		else if(name<=0x1000000	&& (sKeyMask&0x4))
-			solve< Key<3> >(reserved);
-		else	// this never happens if Key<3> is allowed
+		else
 			solve<unsigned>(reserved);
 		// derive all other suffixes
 		derive_1();
@@ -456,8 +403,7 @@ public:
 //	INITIALIZATION	//
 
 index Archon::estimateReserve(const index n)	{
-	const int need = 0x10001 - ((sKeyMask&4) ? n/12 : 0);
-	return need>0x200 ? need : 0x200;
+	return 0x10001;
 }
 
 Archon::Archon(const index Nx)
