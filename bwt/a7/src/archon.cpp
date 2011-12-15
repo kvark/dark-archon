@@ -192,7 +192,7 @@ class	Constructor	{
 		for(i=0; i!=N; ++i)	{
 			//todo: fix to support 1Gb input
 			const suffix j = P[i] & MASK_SUF;
-			if((j-1U) >= NL)
+			if((j-1U) >= NL/* || !(P[i]&MASK_UP)*/)
 				continue;
 			const T cur = data[j];
 			if(data[j-1U] <= cur)	{
@@ -225,42 +225,48 @@ class	Constructor	{
 		}while(i);
 	}
 
+	// find the length of each LMS substring
+	// and write it into P[n1+1+(x>>1)]
+	// no collisions guaranteed because LMS distance>=2
 	void computeTargetLengths_1()	{
+		if(!n1)
+			return;
 		suffix *const s1 = P+n1+1;
-		index i=0,j=0;	// using area of P[n1,N)
-		// find the length of each LMS substring
-		// and write it into P[n1+1+(x>>1)]
-		// no collisions guaranteed because LMS distance>=2
-		while(++i<N)	{
-			if(data[i-1] >= data[i])	
-				continue;
+		index i=0,j=0,k=0;	// using area of P[n1,N)
+		for(;;)	{
+			do	{ ++i; assert(i<N);
+			}while(data[i-1] >= data[i]);
 			s1[i>>1] = i-j;	//length
 			j = i;
-			while(++i<N && data[i-1] <= data[i]);
+			if(++k == n1)
+				break;
+			do	{ ++i; assert(i<N);
+			}while(data[i-1] <= data[i]);
 		}
 	}
 
 	void reduce_1()	{
-		index i,j;
+		assert(!n1 && N);
 		// scatter LMS into bucket positions
 		memset( P, 0, N*sizeof(suffix) );
 		P[N] = 0 + MASK_UP;
 		buckets();
 		//todo: optimize more
 		bool prevUp = true;
-		for(j=N,n1=0;;)	{
-			for(i=--j; j && data[j-1U]==data[i]; --j);
+		for(index j=N;;)	{
+			index i=j-1;
+			while(--j && data[j-1U]==data[i]);
 			if(j && data[j-1U]<data[i])	{
 				prevUp = false;
-			}else	{	//up
-				if(!prevUp)	{
-					++n1; // found LMS!
-					P[--RE[data[i]]] = i+1U + MASK_LMS + MASK_UP;
-					prevUp = true;
-				}
-				if(!j)
-					break;
+				continue;
+			}//up
+			if(!prevUp)	{ // found LMS!
+				++n1; prevUp = true; 
+				const suffix s = i+1U + MASK_LMS + MASK_UP;
+				P[--RE[data[i]]] = s;
 			}
+			if(!j)
+				break;
 		}
 
 		// sort by induction (evil technology!)
@@ -285,7 +291,7 @@ class	Constructor	{
 		suffix *const s1 = P+d1, *x=P+n1;
 		for(index j=0; ;++x)		{
 			const suffix val = *x;
-			assert( x<P+N );
+			assert( x<=P+N );
 			if(val)	{
 				s1[j] = P[j];
 				input[j] = val-1U;
@@ -326,14 +332,12 @@ class	Constructor	{
 		// LMS number -> actual string number
 		//note: going left to right here!
 		for(i=0,j=0; ; )	{
-			do	{ ++i;
-				assert(i<N);
+			do	{ ++i; assert(i<N);
 			}while(data[i-1U] >= data[i]);
 			s1[j] = i;
 			if(++j==n1)
 				break;
-			do	{ ++i;
-				assert(i<N);
+			do	{ ++i; assert(i<N);
 			}while(data[i-1U] <= data[i]);
 		}
 		// update the indices in the sorted array
@@ -435,8 +439,6 @@ int Archon::en_read(FILE *const fx, index ns)	{
 
 int Archon::en_compute()	{
 	Constructor<byte>( str, P, N, 0x100, Nmax-N+Nreserve );
-	//const Key<1> *const input = reinterpret_cast<const Key<1>*>(str);
-	//Constructor< Key<1> >( input, P, N, 0x100, Nreserve );
 	return 0;
 }
 
@@ -474,6 +476,7 @@ int Archon::de_compute()	{
 	index i,k;
 	// compute buchet heads
 	index *const R = P+N;
+	assert( N+0x101 <= Nmax+1+Nreserve );
 	memset( R, 0, 0x100*sizeof(index) );
 	for(i=0; i!=N; ++i)
 		++R[str[i]];
