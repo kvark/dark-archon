@@ -7,32 +7,32 @@
 
 //--------------------------------------------------------//
 // This SAC implementation is derived from ideas explained here:
-// http://www.cs.sysu.edu.cn/nong/index.files/Two%20Efficient%20Algorithms%20for%20Linear%20Suffix%20Array%20Construction.pdf
+// http://www.cs.sysu.edu.cn/nong/t_index.files/Two%20Efficient%20Algorithms%20for%20Linear%20Suffix%20Array%20Construction.pdf
 //--------------------------------------------------------//
 
 template<typename T>
 class	Constructor	{
 	const T	*const data;	// input string
 	suffix	*const P;		// suffix array
-	index	*const R,		// radix start
+	t_index	*const R,		// radix start
 			*const RE,		// radix end
 			*const R2;		// radix backup
-	const	index N;		// input length
-	const	index K;		// number of unique values
-	index	n1;				// number of LMS
-	index	d1;				// memory units occupied by the new data
-	index	name;			// new number of unique values
+	const	t_index N;		// input length
+	const	t_index K;		// number of unique values
+	t_index	n1;				// number of LMS
+	t_index	d1;				// memory units occupied by the new data
+	t_index	name;			// new number of unique values
 
 	//---------------------------------
 	//	Strategy-0 implementation	//
 
 	void directSort()	{
-		for(index i=0; i!=N; ++i)
+		for(t_index i=0; i!=N; ++i)
 			P[i] = i+1;
 		ray(P,N,1);
 	}
 
-	void ray(suffix *A, index num, unsigned depth)	{
+	void ray(suffix *A, t_index num, unsigned depth)	{
 		while(num>1)	{
 			suffix *x,*z;
 			{
@@ -50,18 +50,17 @@ class	Constructor	{
 				suffix *y = x;
 				for(;;)	{
 					s = *y;
-					if(s<depth)
-						goto more;
-					const T q = data[s-depth];
-					if(q <= w)	{
-						if(q != w) *y=*x,*x++=s;
-						if(++y == z)
-							break;
-					}else	{
-						more:
-						if(--z == y) break;
-						*y=*z,*z=s;
+					if(s>=depth)	{
+						const T q = data[s-depth];
+						if(q <= w)	{
+							if(q != w) *y=*x,*x++=s;
+							if(++y == z)
+								break;
+							continue;
+						}
 					}
+					if(--z == y) break;
+					*y=*z,*z=s;
 				}
 				y=z; z=A+num;
 				num = y-x;
@@ -74,7 +73,7 @@ class	Constructor	{
 
 	bool sufCompare(const suffix a, const suffix b)	{
 		assert(a!=b);
-		index d=0; do ++d;
+		t_index d=0; do ++d;
 		while(a>=d && b>=d && data[a-d]==data[b-d]);
 		return a>=d && (b<d || data[a-d]<data[b-d]);
 	}
@@ -89,27 +88,27 @@ class	Constructor	{
 	//	Commonly used routines	//
 
 	void checkData()	{
-		if(sizeof(T) == sizeof(index))
+		if(sizeof(T) == sizeof(t_index))
 			return;
 		byte shift = sizeof(T)<<3;
 		assert(!( (K-1)>>shift ));
 		if(K>>shift)
 			return;
-		for(index i=0; i<N; ++i)
+		for(t_index i=0; i<N; ++i)
 			assert(data[i]>=0 && data[i]<K);
 	}
 
-	bool checkUnique(const index num)	{
-		for(index i=0; i!=num; ++i)
-			for(index j=i+1; j!=num; ++j)
+	bool checkUnique(const t_index num)	{
+		for(t_index i=0; i!=num; ++i)
+			for(t_index j=i+1; j!=num; ++j)
 				if(P[i]==P[j])
 					return false;
 		return true;
 	}
 
 	void makeBuckets()	{
-		memset( R, 0, K*sizeof(index) );
-		index i,sum;
+		memset( R, 0, K*sizeof(t_index) );
+		t_index i,sum;
 		for(i=0; i<N; ++i)
 			++R[data[i]];
 		for(R[i=K]=sum=N; i--;)
@@ -119,21 +118,21 @@ class	Constructor	{
 
 	void buckets()	{
 		if(R2)	{
-			memcpy( RE, R2, (K-1U)*sizeof(index) );
+			memcpy( RE, R2, (K-1U)*sizeof(t_index) );
 			R[0] = 0; R[K] = N;
 		}else
 			makeBuckets();
 	}
 
 	void packTargetIndices()	{
-		index i,j;
+		t_index i,j;
 		// pack LMS into the first n1 suffixes
 		if(!n1)
 			return;
 		for(j=i=0; ;++i)	{
 			assert(i<N);
 			const suffix s = ~P[i];
-			if(static_cast<index>(s) < N)	{
+			if(static_cast<t_index>(s) < N)	{
 				P[j] = s;
 				if(++j == n1)
 					break;
@@ -144,7 +143,7 @@ class	Constructor	{
 	void computeTargetValues()	{
 		// compare LMS using known lengths
 		suffix *const s1 = P+n1+1;
-		index i, prev_len = 0;
+		t_index i, prev_len = 0;
 		suffix prev = 0;
 		for(name=0,i=0; i!=n1; ++i)	{
 			const suffix cur = P[i];
@@ -175,15 +174,15 @@ class	Constructor	{
 	//todo: use buckets to traverse the SA efficiently
 	// if R2 is available
 	void induce_1()	{
-		const index NL = N-1U;
-		index i;
+		const t_index NL = N-1U;
+		t_index i;
 		assert(N);
 		//left2right
 		buckets();
 		for(i=0; i!=N; ++i)	{
 			//todo: fix to support 1Gb input
 			const suffix s = ~P[i];
-			if(static_cast<index>(s-1) >= NL)
+			if(static_cast<t_index>(s-1) >= NL)
 				continue;
 			const T cur = data[s];
 			if(data[s-1] <= cur)		{
@@ -197,7 +196,7 @@ class	Constructor	{
 		P[--RE[data[0]]] = ~1;
 		i=N; do	{
 			const suffix s = ~P[--i];
-			if(static_cast<index>(s-1) >= NL)
+			if(static_cast<t_index>(s-1) >= NL)
 				continue;
 			const T cur = data[s];
 			if(data[s-1] >= cur)		{
@@ -215,7 +214,7 @@ class	Constructor	{
 		if(!n1)
 			return;
 		suffix *const s1 = P+n1+1;
-		index i=0,j=0,k=0;	// using area of P[n1,N)
+		t_index i=0,j=0,k=0;	// using area of P[n1,N)
 		for(;;)	{
 			do	{ ++i; assert(i<N);
 			}while(data[i-1] >= data[i]);
@@ -235,8 +234,8 @@ class	Constructor	{
 		buckets();
 		//todo: optimize more
 		bool prevUp = true;
-		for(index j=N;;)	{
-			index i = j-1;
+		for(t_index j=N;;)	{
+			t_index i = j-1;
 			while(--j && data[j-1U]==data[i]);
 			if(j && data[j-1U]<data[i])	{
 				prevUp = false;
@@ -270,7 +269,7 @@ class	Constructor	{
 		// pack values into [0,m1] and
 		// move suffixes into [m1,m1+n1]
 		suffix *const s1 = P+d1, *x=P+n1;
-		for(index j=0; ;++x)		{
+		for(t_index j=0; ;++x)		{
 			const suffix val = *x;
 			assert( x<=P+N );
 			if(val)	{
@@ -283,12 +282,12 @@ class	Constructor	{
 	}
 
 	template<typename Q>
-	void solve(const index reserve)	{
+	void solve(const t_index reserve)	{
 		Q *const input = reinterpret_cast<Q*>(P);
 		packTargetValues(input);
 		if(name<n1)	{
 			// count the new memory reserve
-			index left = reserve;
+			t_index left = reserve;
 			assert( n1+d1 <= N );
 			left += N-n1-d1; // take in account new data and suffix storage
 			if(R2)	{
@@ -300,13 +299,13 @@ class	Constructor	{
 		}else	{
 			// permute back from values into indices
 			assert(name == n1);
-			for(index i=n1; i--; )
+			for(t_index i=n1; i--; )
 				P[d1+input[i]] = i+1;
 		}
 	}
 
 	void derive_1()	{
-		index i,j;
+		t_index i,j;
 		memcpy( P, P+d1, n1*sizeof(suffix) );
 		suffix *const s1 = P+n1;
 		// get the list of LMS strings into [n1,2*n1]
@@ -322,7 +321,7 @@ class	Constructor	{
 			}while(data[i-1] <= data[i]);
 		}
 		// update the indices in the sorted array
-		// LMS index -> string index
+		// LMS t_index -> string t_index
 		for(i=0; i<n1; ++i)	{
 			j = P[i];
 			assert(j>0 && j<=n1);
@@ -338,7 +337,7 @@ class	Constructor	{
 			j = P[i]; P[i] = 0;
 			assert(j>0 && j<=N				&& "Invalid suffix!");
 			assert(data[j-1]	<= prev_sym		&& "Not sorted!");
-			index *const pr = RE+data[j-1];
+			t_index *const pr = RE+data[j-1];
 			P[--*pr] = ~j;
 			assert(pr[0] >= pr[-1]	&& "Stepped twice on the same suffix!");
 			assert(pr[0] >= i		&& "Not sorted properly!");
@@ -356,16 +355,16 @@ class	Constructor	{
 	//	Main entry point	//
 
 public:
-	Constructor(const T *const _data, suffix *const _P, const index _N, const index _K, const index reserved)
-	: data(_data), P(_P), R(reinterpret_cast<index*>(_P+_N+1)), RE(R+1)
-	, R2(reserved>=_K*2 ? reinterpret_cast<index*>(_P+_N+2+reserved-_K) : NULL)
+	Constructor(const T *const _data, suffix *const _P, const t_index _N, const t_index _K, const t_index reserved)
+	: data(_data), P(_P), R(reinterpret_cast<t_index*>(_P+_N+1)), RE(R+1)
+	, R2(reserved>=_K*2 ? reinterpret_cast<t_index*>(_P+_N+2+reserved-_K) : NULL)
 	, N(_N), K(_K), n1(0), d1(0), name(0)	{
 		assert( N>0 && K<reserved );
 		checkData();
 		if(R2)	{
 			assert(R2 >= R+K+1);
 			makeBuckets();
-			memcpy( R2, RE, (K-1)*sizeof(index) );
+			memcpy( R2, RE, (K-1)*sizeof(t_index) );
 		}
 #		ifdef	SAIS_DISABLE
 		directSort();
@@ -392,18 +391,18 @@ public:
 
 //	INITIALIZATION	//
 
-index Archon::estimateReserve(const index n)	{
+t_index Archon::estimateReserve(const t_index n)	{
 	return 0x10001;
 }
 
-Archon::Archon(const index Nx)
+Archon::Archon(const t_index Nx)
 : Nmax(Nx)
 , Nreserve(estimateReserve(Nx))
 , P(new suffix[Nmax+1+Nreserve])
 , str(new byte[Nmax+1])
 , N(0), baseId(0) {
 	assert(P && str);
-	assert(sizeof(index) == sizeof(suffix));
+	assert(sizeof(t_index) == sizeof(suffix));
 }
 
 Archon::~Archon()	{
@@ -418,7 +417,7 @@ unsigned Archon::countMemory() const	{
 
 //	ENCODING	//
 
-int Archon::en_read(FILE *const fx, index ns)	{
+int Archon::en_read(FILE *const fx, t_index ns)	{
 	assert(ns>=0 && ns<=Nmax);
 	N = fread( str, 1, ns, fx );
 	return N;
@@ -431,7 +430,7 @@ int Archon::en_compute()	{
 
 int Archon::en_write(FILE *const fx)	{
 	baseId = N;
-	for(index i=0; i!=N; ++i)	{
+	for(t_index i=0; i!=N; ++i)	{
 		suffix pos = P[i];
 		if(pos == N)	{
 			baseId = i;
@@ -440,38 +439,38 @@ int Archon::en_write(FILE *const fx)	{
 		fputc( str[pos], fx);
 	}
 	assert(baseId != N);
-	fwrite( &baseId, sizeof(index), 1, fx);
+	fwrite( &baseId, sizeof(t_index), 1, fx);
 	return 0;
 }
 
 
 //	DECODING	//
 
-void Archon::roll(const index i)	{
+void Archon::roll(const t_index i)	{
 	P[i] = P[N+str[i]]++;
 	assert(N==1 || i != P[i]);
 }
 
-int Archon::de_read(FILE *const fx, index ns)	{
+int Archon::de_read(FILE *const fx, t_index ns)	{
 	en_read(fx,ns);
-	int ok = fread( &baseId, sizeof(index), 1, fx );
+	int ok = fread( &baseId, sizeof(t_index), 1, fx );
 	assert(ok && baseId<N);
 	return N;
 }
 
 int Archon::de_compute()	{
-	index i,k;
+	t_index i,k;
 	// compute buchet heads
-	index *const R = reinterpret_cast<index*>(P+N);
+	t_index *const R = reinterpret_cast<t_index*>(P+N);
 	assert( N+0x101 <= Nmax+1+Nreserve );
-	memset( R, 0, 0x100*sizeof(index) );
+	memset( R, 0, 0x100*sizeof(t_index) );
 	for(i=0; i!=N; ++i)
 		++R[str[i]];
 	for(k=N,i=0x100; i--;)
 		R[i] = (k-=R[i]);
 	// fill the jump table
 #	ifndef	NDEBUG
-	memset( P, 0, (N+1)*sizeof(index) );
+	memset( P, 0, (N+1)*sizeof(t_index) );
 #	endif
 	for(i=0; i<baseId; i++)		roll(i);
 	for(i=baseId+1U; i<N; i++)	roll(i);
@@ -480,7 +479,7 @@ int Archon::de_compute()	{
 }
 
 int Archon::de_write(FILE *const fx)	{
-	index i, k=baseId;
+	t_index i, k=baseId;
 	for(i=0; i!=N; ++i,k=P[k])
 		putc(str[k],fx);
 	assert( k==baseId );
