@@ -139,7 +139,7 @@ class	Constructor	{
 		for(j=i=0; ;++i)	{
 			const suffix suf = P[i] & MASK_SUF;
 			assert(suf>0 && i<N);
-			if(P[i] & MASK_LMS)	{
+			if((P[i] & MASK_LMS) && suf!=N)	{
 				P[j] = suf;
 				if(++j == n1)
 					break;
@@ -192,35 +192,37 @@ class	Constructor	{
 		for(i=0; i!=N; ++i)	{
 			//todo: fix to support 1Gb input
 			const suffix j = P[i] & MASK_SUF;
-			if((j-1U) >= NL/* || !(P[i]&MASK_UP)*/)
+			if((j-1U) >= NL || !(P[i]&MASK_LMS))
 				continue;
 			const T cur = data[j];
 			if(data[j-1U] <= cur)	{
-				add = 0;
-				if(data[j-1U] == cur)
+				add = MASK_LMS;
+				if(0 && data[j-1U] == cur)
 					add = P[i] & MASK_UP;	
-				P[R[cur]++] = j+1U + add;
+				P[R[cur]++] = j+1U+add;
+				P[i] = j;	//clear mask
 			}
 		}
 		//right2left
 		buckets();
-		add = MASK_UP;
-		if(N>1 && data[0]<data[1])
-			add += MASK_LMS;
-		P[--RE[data[0]]] = 1U + add;
+		add = MASK_LMS;
+		//if(N>1 && data[0]<data[1])
+		//	add += MASK_LMS;
+		P[--RE[data[0]]] = 1U+add;
 		i=N; do	{
 			const suffix j = P[--i] & MASK_SUF;
-			if((j-1U) >= NL)
+			if((j-1U) >= NL || !(P[i]&MASK_LMS))
 				continue;
 			const T cur = data[j];
 			if(data[j-1U] >= cur)	{
-				add = 0;
-				if(data[j-1U] != cur || (P[i] & MASK_UP))	{
+				add = MASK_LMS;
+				if(0 && data[j-1U] != cur || (P[i] & MASK_UP))	{
 					add = MASK_UP;
 					if(j+1U<N && cur<data[j+1U])
 						add += MASK_LMS;
 				}
-				P[--RE[cur]] = j+1U + add;
+				P[--RE[cur]] = j+1U+add;
+				P[i] = j;	//set mask
 			}
 		}while(i);
 	}
@@ -358,7 +360,7 @@ class	Constructor	{
 			assert(j>0 && j<=N				&& "Invalid suffix!");
 			assert(data[j-1U] <= prev_sym	&& "Not sorted!");
 			index *const pr = RE+data[j-1U];
-			P[--*pr] = j;
+			P[--*pr] = j + MASK_LMS;
 			assert(pr[0] >= pr[-1]	&& "Stepped twice on the same suffix!");
 			assert(pr[0] >= i		&& "Not sorted properly!");
 		}
