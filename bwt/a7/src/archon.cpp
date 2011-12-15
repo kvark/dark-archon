@@ -186,7 +186,7 @@ class	Constructor	{
 			if(static_cast<index>(s-1) >= NL)
 				continue;
 			const T cur = data[s];
-			if(data[s-1] <= cur)	{
+			if(data[s-1] <= cur)		{
 				assert(R[cur] < RE[cur]);
 				P[R[cur]++] = ~(s+1);
 				P[i] = s;	//clear mask
@@ -367,17 +367,20 @@ public:
 			makeBuckets();
 			memcpy( R2, RE, (K-1)*sizeof(index) );
 		}
-		// directSort();
+#		ifdef	SAIS_DISABLE
+		directSort();
+		return;
+#		endif
 		// reduce the problem to LMS sorting
 		reduce_1();
 		// solve the reduced problem
-		if(!name)
-			return;
-		else if(name<=0x100)
+#		ifndef SAIS_COMPARE
+		if(name<=0x100)
 			solve<byte>(reserved);
 		else if(name<=0x10000)
 			solve<dbyte>(reserved);
 		else
+#		endif
 			solve<unsigned>(reserved);
 		// derive all other suffixes
 		derive_1();
@@ -400,6 +403,7 @@ Archon::Archon(const index Nx)
 , str(new byte[Nmax+1])
 , N(0), baseId(0) {
 	assert(P && str);
+	assert(sizeof(index) == sizeof(suffix));
 }
 
 Archon::~Archon()	{
