@@ -8,7 +8,7 @@
 //--------------------------------------------------------//
 //	Universal data key class, used as SAC input
 //--------------------------------------------------------//
-static const unsigned sKeyMask = 7;
+static const unsigned sKeyMask = 6;
 
 template<int SIZE>
 class Key	{
@@ -39,8 +39,8 @@ template<> Key<2>& Key<2>::operator=(const unsigned v)	{
 }
 template<> Key<3>& Key<3>::operator=(const unsigned v)	{
 	assert(!(v>>24));
-	data[0]=data[1]=data[2]=0;
-	*reinterpret_cast<unsigned*>(data) += v & MASK;
+	*reinterpret_cast<dbyte*>(data) = v&(0xFFFF);
+	data[2] = v>>16;
 	return *this;
 }
 template<> Key<4>& Key<4>::operator=(const unsigned v)	{
@@ -63,11 +63,16 @@ template<> Key<2>::operator unsigned() const	{
 
 template<typename T>
 class	Constructor	{
-	const T *const data;
-	suffix *const P;
-	index *const R, *const RE, *const R2;
-	const index N, K;
-	index n1, name;
+	const T	*const data;	// input string
+	suffix	*const P;		// suffix array
+	index	*const R,		// radix start
+			*const RE,		// radix end
+			*const R2;		// radix backup
+	const	index N;		// input length
+	const	index K;		// number of unique values
+	index	n1;				// number of LMS
+	index	d1;				// 
+	index	name;
 
 	enum {
 		MASK_LMS	= 1U<<31U,
@@ -323,9 +328,12 @@ class	Constructor	{
 	void packTargetValues(Q *const input)	{
 		if(!n1)
 			return;
-		// pack values into [0,n1] and
-		// move suffixes into [n1,2*n1]
-		suffix *const s1 = P+n1, *x=s1;
+		// number of words occupied by new data
+		d1 = 1 + (sizeof(Q)*n1-1) / sizeof(suffix);
+		assert(d1<=n1);
+		// pack values into [0,m1] and
+		// move suffixes into [m1,m1+n1]
+		suffix *const s1 = P+d1, *x=P+n1;
 		for(index j=0; ;++x)		{
 			const suffix val = *x;
 			assert( x<P+N );
@@ -343,40 +351,49 @@ class	Constructor	{
 		Q *const input = reinterpret_cast<Q*>(P);
 		packTargetValues(input);
 		if(name<n1)	{
-			Constructor<Q>( input, P+n1, n1, name, reserve );
+			// count the new memory reserve
+			index left = reserve;
+			assert( n1+d1 <= N );
+			left += N-n1-d1; // take in account new data and suffix storage
+			if(R2)	{
+				assert( left >= K-1 );
+				left -= K-1;
+			}
+			// finally, solve the sub-problem
+			Constructor<Q>( input, P+d1, n1, name, left );
 		}else	{
 			// permute back from values into indices
 			assert(name == n1);
 			for(index i=n1; i--; )
-				P[n1+input[i]] = i+1U;
+				P[d1+input[i]] = i+1U;
 		}
 	}
 
 	void derive_1()	{
 		index i,j;
-		// get the list of LMS strings
+		memcpy( P, P+d1, n1*sizeof(suffix) );
+		suffix *const s1 = P+n1;
+		// get the list of LMS strings into [n1,2*n1]
 		// LMS number -> actual string number
 		//note: going left to right here!
 		for(i=0,j=0; ; )	{
 			do	{ ++i;
 				assert(i<N);
 			}while(data[i-1U] >= data[i]);
-			P[j] = i;
+			s1[j] = i;
 			if(++j==n1)
 				break;
 			do	{ ++i;
 				assert(i<N);
 			}while(data[i-1U] <= data[i]);
 		}
-		suffix *const s1 = P+n1;
 		// update the indices in the sorted array
 		// LMS index -> string index
 		for(i=0; i<n1; ++i)	{
-			j = s1[i];
+			j = P[i];
 			assert(j>0 && j<=n1);
-			s1[i] = P[j-1U];
+			P[i] = s1[j-1U];
 		}
-		memcpy( P, P+n1, n1*sizeof(suffix) );
 		// scatter LMS back into proper positions
 		buckets();
 		//option: generate buckets again here
@@ -406,34 +423,28 @@ public:
 	Constructor(const T *const _data, suffix *const _P, const index _N, const index _K, const index reserved)
 	: data(_data), P(_P), R(_P+_N+1), RE(R+1)
 	, R2(reserved>=_K*2 ? _P+_N+2+reserved-_K : NULL)
-	, N(_N), K(_K), n1(0), name(0)	{
+	, N(_N), K(_K), n1(0), d1(0), name(0)	{
 		assert( N<=MASK_SUF && K<reserved );
 		checkData();
-		index left = reserved;
 		if(R2)	{
 			assert(R2 >= R+K+1);
 			makeBuckets();
 			memcpy( R2, RE, (K-1)*sizeof(index) );
-			assert( left >= K-1 );
-			left -= K-1;
 		}
 		// directSort();
 		// reduce the problem to LMS sorting
 		reduce_1();
-		assert( n1+n1<=N );
-		left += N-2*n1;
-		assert( P+n1+n1+1+left + (R2?K-1:0) == P+N+1+reserved );
 		// solve the reduced problem
 		if(!name)
 			return;
 		else if(name<=0x100		&& (sKeyMask&0x1))
-			solve<byte>(left);
+			solve<byte>(reserved);
 		else if(name<=0x10000	&& (sKeyMask&0x2))
-			solve<dbyte>(left);
+			solve<dbyte>(reserved);
 		else if(name<=0x1000000	&& (sKeyMask&0x4))
-			solve< Key<3> >(left);
-		else	// this never happens
-			solve<unsigned>(left);
+			solve< Key<3> >(reserved);
+		else	// this never happens if Key<3> is allowed
+			solve<unsigned>(reserved);
 		// derive all other suffixes
 		derive_1();
 	}
