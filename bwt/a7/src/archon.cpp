@@ -133,7 +133,7 @@ class	Constructor	{
 		for(j=i=0; ;++i)	{
 			assert(i<N);
 			const suffix s = ~P[i];
-			if(s>=0 && s!=N)	{
+			if(static_cast<index>(s) < N)	{
 				P[j] = s;
 				if(++j == n1)
 					break;
@@ -175,6 +175,7 @@ class	Constructor	{
 	//todo: use buckets to traverse the SA efficiently
 	// if R2 is available
 	void induce_1()	{
+		const index NL = N-1U;
 		index i;
 		assert(N);
 		//left2right
@@ -182,7 +183,7 @@ class	Constructor	{
 		for(i=0; i!=N; ++i)	{
 			//todo: fix to support 1Gb input
 			const suffix s = ~P[i];
-			if(s<=0 || s==N)
+			if(static_cast<index>(s-1) >= NL)
 				continue;
 			const T cur = data[s];
 			if(data[s-1] <= cur)	{
@@ -196,7 +197,7 @@ class	Constructor	{
 		P[--RE[data[0]]] = ~1;
 		i=N; do	{
 			const suffix s = ~P[--i];
-			if(s<=0 || s==N)
+			if(static_cast<index>(s-1) >= NL)
 				continue;
 			const T cur = data[s];
 			if(data[s-1] >= cur)		{
