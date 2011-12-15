@@ -167,6 +167,12 @@ class	Constructor	{
 	//	Commonly used routines	//
 
 	void checkData()	{
+		if(sizeof(T) == sizeof(index))
+			return;
+		byte shift = sizeof(T)<<3;
+		assert(!( (K-1)>>shift ));
+		if(K>>shift)
+			return;
 		for(index i=0; i<N; ++i)
 			assert(data[i]>=0 && data[i]<K);
 	}
@@ -304,7 +310,6 @@ class	Constructor	{
 			j = i;
 			while(++i<N && data[i-1] <= data[i]);
 		}
-
 	}
 
 	void reduce_1()	{
@@ -340,8 +345,8 @@ class	Constructor	{
 		computeTargetValues();
 	}
 
-	template<int KS>
-	void packTargetValues(Key<KS> *const input)	{
+	template<typename Q>
+	void packTargetValues(Q *const input)	{
 		if(!n1)
 			return;
 		// pack values into [0,n1] and
@@ -359,14 +364,13 @@ class	Constructor	{
 		}
 	}
 
-	template<int KS>
+	template<typename Q>
 	void solve(const index reserve)	{
-		typedef Key<KS> XKey;
-		XKey *const input = reinterpret_cast<XKey*>(P);
+		Q *const input = reinterpret_cast<Q*>(P);
 		packTargetValues(input);
 		if(name<n1)	{
 			assert(n1+n1<N);
-			Constructor<XKey>( input, P+n1, n1, name, reserve+N-n1 );
+			Constructor<Q>( input, P+n1, n1, name, reserve+N-n1 );
 		}else	{
 			// permute back from values into indices
 			assert(name == n1);
@@ -443,25 +447,17 @@ public:
 		if(!name)
 			return;
 		else if(name<=0x100		&& (sKeyMask&0x1))
-			solve<1>(reserved);
+			solve<byte>(reserved);
 		else if(name<=0x10000	&& (sKeyMask&0x2))
-			solve<2>(reserved);
+			solve<dbyte>(reserved);
 		else if(name<=0x1000000	&& (sKeyMask&0x4))
-			solve<3>(reserved);
-		else
-			solve<4>(reserved);
+			solve< Key<3> >(reserved);
+		else	// this never happens
+			solve<unsigned>(reserved);
 		// derive all other suffixes
 		derive_1();
 	}
 };
-
-template<>	void Constructor<byte>::checkData()	{
-	assert( K==0x100 );
-	assert( sizeof(sBuckets)/sizeof(index) > K );
-}
-template<>	void Constructor<dbyte>::checkData()	{
-	assert( K==0x10000 );
-}
 
 
 //--------------------------------------------------------//
@@ -469,12 +465,13 @@ template<>	void Constructor<dbyte>::checkData()	{
 //	INITIALIZATION	//
 
 index Archon::estimateReserve(const index n)	{
-	return n>>1;
+	const int need = 0x10001 - ((sKeyMask&4) ? n/12 : 0);
+	return need>0x101 ? need : 0x101;
 }
 
 Archon::Archon(const index Nx)
 : Nmax(Nx)
-, Nreserve(estimateReserve(Nx)+0x101)
+, Nreserve(estimateReserve(Nx))
 , P(new suffix[Nmax+1+Nreserve])
 , str(new byte[Nmax+1])
 , N(0), baseId(0) {
