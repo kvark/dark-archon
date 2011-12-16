@@ -196,8 +196,8 @@ class	Constructor	{
 		}
 		//right2left
 		buckets();
-		P[--RE[data[0]]] = ~1;
-		pr = P + RE[prev=0];
+		pr = P + RE[prev=data[0]];
+		*--pr = ~1;
 		i=N; do	{
 			const suffix s = ~P[--i];
 			if(static_cast<t_index>(s-1) >= NL)
@@ -336,19 +336,23 @@ class	Constructor	{
 		}
 		// scatter LMS back into proper positions
 		buckets();
-		//option: generate buckets again here
-		// but make R2 static
 		memset( P+n1, 0, (N-n1)*sizeof(suffix) );
 		T prev_sym = K-1;
+		suffix *pr = P + RE[prev_sym];
 		for(i=n1; i--; )	{
 			j = P[i]; P[i] = 0;
 			assert(j>0 && j<=N				&& "Invalid suffix!");
-			assert(data[j-1]	<= prev_sym		&& "Not sorted!");
-			t_index *const pr = RE+data[j-1];
-			P[--*pr] = ~j;
+			const T cur = data[j-1];
+			if(cur != prev_sym)	{
+				assert(cur<prev_sym		&& "Not sorted!");
+				RE[prev_sym] = pr-P;
+				pr = P + RE[prev_sym = cur];
+			}
+			*--pr = ~j;
 			assert(pr[0] >= pr[-1]	&& "Stepped twice on the same suffix!");
 			assert(pr[0] >= i		&& "Not sorted properly!");
 		}
+		RE[prev_sym] = pr-P;
 		// induce the rest of suffixes
 		induce();
 		// fix the negatives
