@@ -216,7 +216,7 @@ class	Constructor	{
 	}
 
 	// find the length of each LMS substring
-	// and write it into P[n1+1+(x>>1)]
+	// and write it into P[n1+(x>>1)]
 	// no collisions guaranteed because LMS distance>=2
 	void computeTargetLengths()	{
 		if(!n1)
@@ -243,15 +243,16 @@ class	Constructor	{
 		//todo: optimize more
 		bool prevUp = true;
 		for(t_index j=N;;)	{
-			t_index i = j-1;
-			while(--j && data[j-1U]==data[i]);
-			if(j && data[j-1U]<data[i])	{
+			const t_index i = j-1;
+			const T cur = data[i];
+			while(--j && data[j-1U]==cur);
+			if(j && data[j-1U]<cur)	{
 				prevUp = false;
 				continue;
 			}//up
 			if(!prevUp)	{ // found LMS!
 				++n1; prevUp = true; 
-				P[--RE[data[i]]] = ~(i+1);
+				P[--RE[cur]] = ~(i+1);
 			}
 			if(!j)
 				break;
@@ -313,13 +314,13 @@ class	Constructor	{
 	}
 
 	void derive()	{
-		t_index i,j;
+		t_index i=0;
 		memcpy( P, P+d1, n1*sizeof(suffix) );
 		suffix *const s1 = P+n1;
 		// get the list of LMS strings into [n1,2*n1]
 		// LMS number -> actual string number
 		//note: going left to right here!
-		for(i=0,j=0; ; )	{
+		for(t_index j=0; ; )	{
 			do	{ ++i; assert(i<N);
 			}while(data[i-1] >= data[i]);
 			s1[j] = i;
@@ -331,28 +332,29 @@ class	Constructor	{
 		// update the indices in the sorted array
 		// LMS t_index -> string t_index
 		for(i=0; i<n1; ++i)	{
-			assert(P[i]>0 && P[i]<=static_cast<suffix>(n1));
+			assert( P[i]>0 && P[i]<=(suffix)n1 );
 			P[i] = s1[P[i]-1];
 		}
 		// scatter LMS back into proper positions
 		buckets();
+		//option: generate buckets again here
+		// but make R2 static
 		memset( P+n1, 0, (N-n1)*sizeof(suffix) );
 		T prev_sym = K-1;
-		suffix *pr = P + RE[prev_sym];
+		suffix *pr = P+RE[prev_sym];
 		for(i=n1; i--; )	{
-			j = P[i]; P[i] = 0;
-			assert(j>0 && j<=N				&& "Invalid suffix!");
-			const T cur = data[j-1];
+			const suffix suf = P[i];
+			P[i] = 0;
+			assert(suf>0 && suf<=(suffix)N	&& "Invalid suffix!");
+			const T cur = data[suf-1];
 			if(cur != prev_sym)	{
 				assert(cur<prev_sym		&& "Not sorted!");
-				RE[prev_sym] = pr-P;
-				pr = P + RE[prev_sym = cur];
+				pr = P + RE[prev_sym=cur];
 			}
-			*--pr = ~j;
-			assert(pr[0] >= pr[-1]	&& "Stepped twice on the same suffix!");
-			assert(pr[0] >= i		&& "Not sorted properly!");
+			*--pr = ~suf;
+			assert(RE[cur] >= R[cur] 	&& "Stepped twice on the same suffix!");
+			assert(RE[cur] >= i			&& "Not sorted properly!");
 		}
-		RE[prev_sym] = pr-P;
 		// induce the rest of suffixes
 		induce();
 		// fix the negatives
@@ -377,14 +379,14 @@ public:
 			makeBuckets();
 			memcpy( R2, RE, (K-1)*sizeof(t_index) );
 		}
-#		ifdef	SAIS_DISABLE
+#		ifdef	NO_INDUCTION
 		directSort();
 		return;
 #		endif
 		// reduce the problem to LMS sorting
 		reduce();
 		// solve the reduced problem
-#		ifndef SAIS_COMPARE
+#		ifndef NO_SQUEEZE
 		if(name<=0x100)
 			solve<byte>(reserved);
 		else if(name<=0x10000)
