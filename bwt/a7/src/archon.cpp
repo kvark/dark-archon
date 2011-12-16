@@ -170,40 +170,8 @@ class	Constructor	{
 	// here is the slowest part of the method!
 	//todo: use buckets to traverse the SA efficiently
 	// if R2 is available
-	void induce_orig()	{
-		const t_index NL = N-1U;
-		t_index i;
-		assert(N);
-		//left2right
-		buckets();
-		for(i=0; i!=N; ++i)	{
-			const suffix s = ~P[i];
-			if(static_cast<t_index>(s-1) >= NL)
-				continue;
-			const T cur = data[s];
-			if(data[s-1] <= cur)		{
-				P[R[cur]++] = ~(s+1);
-				assert(R[data[s]] <= RE[data[s]]);
-				P[i] = s;	//clear mask
-			}
-		}
-		//right2left
-		buckets();
-		P[--RE[data[0]]] = ~1;
-		i=N; do	{
-			const suffix s = ~P[--i];
-			if(static_cast<t_index>(s-1) >= NL)
-				continue;
-			const T cur = data[s];
-			if(data[s-1] >= cur)		{
-				P[--RE[cur]] = ~(s+1);
-				assert(R[data[s]] <= RE[data[s]]);
-				P[i] = s;	//clear mask
-			}
-		}while(i);
-	}
 
-	void induce_alt()	{
+	void induce()	{
 		const t_index NL = N-1U;
 		t_index i;
 		T prev; suffix *pr=NULL;
@@ -221,7 +189,6 @@ class	Constructor	{
 					R[prev] = pr-P;
 					pr = P + R[prev=cur];
 				}
-				//P[R[cur]++] = ~(s+1);
 				*pr++ = ~(s+1);
 				assert(R[data[s]] <= RE[data[s]]);
 				P[i] = s;	//clear mask
@@ -241,18 +208,12 @@ class	Constructor	{
 					RE[prev] = pr-P;
 					pr = P + RE[prev=cur];
 				}
-				//P[--RE[cur]] = ~(s+1);
 				*--pr = ~(s+1);
 				assert(R[data[s]] <= RE[data[s]]);
 				P[i] = s;	//clear mask
 			}
 		}while(i);
 	}
-
-	void induce()	{
-		induce_alt();
-	}
-
 
 	// find the length of each LMS substring
 	// and write it into P[n1+1+(x>>1)]
