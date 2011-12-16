@@ -142,7 +142,7 @@ class	Constructor	{
 
 	void computeTargetValues()	{
 		// compare LMS using known lengths
-		suffix *const s1 = P+n1+1;
+		suffix *const s1 = P+n1;
 		t_index i, prev_len = 0;
 		suffix prev = 0;
 		for(name=0,i=0; i!=n1; ++i)	{
@@ -234,7 +234,7 @@ class	Constructor	{
 	void computeTargetLengths_1()	{
 		if(!n1)
 			return;
-		suffix *const s1 = P+n1+1;
+		suffix *const s1 = P+n1;
 		t_index i=0,j=0,k=0;	// using area of P[n1,N)
 		for(;;)	{
 			do	{ ++i; assert(i<N);
@@ -251,7 +251,7 @@ class	Constructor	{
 	void reduce_1()	{
 		assert(!n1 && N);
 		// scatter LMS into bucket positions
-		memset( P, 0, (N+1)*sizeof(suffix) );
+		memset( P, 0, N*sizeof(suffix) );
 		buckets();
 		//todo: optimize more
 		bool prevUp = true;
@@ -292,7 +292,7 @@ class	Constructor	{
 		suffix *const s1 = P+d1, *x=P+n1;
 		for(t_index j=0; ;++x)		{
 			const suffix val = *x;
-			assert( x<=P+N );
+			assert( x<P+N );
 			if(val)	{
 				s1[j] = P[j];
 				input[j] = val-1U;
@@ -372,8 +372,8 @@ class	Constructor	{
 
 public:
 	Constructor(const T *const _data, suffix *const _P, const t_index _N, const t_index _K, const t_index reserved)
-	: data(_data), P(_P), R(reinterpret_cast<t_index*>(_P+_N+1)), RE(R+1)
-	, R2(reserved>=_K*2 ? reinterpret_cast<t_index*>(_P+_N+2+reserved-_K) : NULL)
+	: data(_data), P(_P), R(reinterpret_cast<t_index*>(_P+_N)), RE(R+1)
+	, R2(reserved>=_K*2 ? reinterpret_cast<t_index*>(_P+_N+reserved-_K+1) : NULL)
 	, N(_N), K(_K), n1(0), d1(0), name(0)	{
 		assert( N>0 && K<reserved );
 		checkData();
@@ -414,7 +414,7 @@ t_index Archon::estimateReserve(const t_index n)	{
 Archon::Archon(const t_index Nx)
 : Nmax(Nx)
 , Nreserve(estimateReserve(Nx))
-, P(new suffix[Nmax+1+Nreserve])
+, P(new suffix[Nmax+Nreserve])
 , str(new byte[Nmax+1])
 , N(0), baseId(0) {
 	assert(P && str);
@@ -427,7 +427,7 @@ Archon::~Archon()	{
 }
 
 unsigned Archon::countMemory() const	{
-	return Nmax + (Nmax+1+Nreserve)*sizeof(suffix);
+	return Nmax + (Nmax+Nreserve)*sizeof(suffix);
 }
 
 
@@ -463,7 +463,7 @@ int Archon::en_write(FILE *const fx)	{
 //	DECODING	//
 
 void Archon::roll(const t_index i)	{
-	P[i] = P[N+str[i]]++;
+	P[i] = P[N+1+str[i]]++;
 	assert(N==1 || i != P[i]);
 }
 
@@ -477,8 +477,8 @@ int Archon::de_read(FILE *const fx, t_index ns)	{
 int Archon::de_compute()	{
 	t_index i,k;
 	// compute buchet heads
-	t_index *const R = reinterpret_cast<t_index*>(P+N);
-	assert( N+0x101 <= Nmax+1+Nreserve );
+	t_index *const R = reinterpret_cast<t_index*>(P+N+1);
+	assert( N+0x102 <= Nmax+Nreserve );
 	memset( R, 0, 0x100*sizeof(t_index) );
 	for(i=0; i!=N; ++i)
 		++R[str[i]];
