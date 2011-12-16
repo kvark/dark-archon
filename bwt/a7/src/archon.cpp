@@ -170,7 +170,7 @@ class	Constructor	{
 	// here is the slowest part of the method!
 	//todo: use buckets to traverse the SA efficiently
 	// if R2 is available
-	void induce_1()	{
+	void induce_orig()	{
 		const t_index NL = N-1U;
 		t_index i;
 		assert(N);
@@ -180,15 +180,9 @@ class	Constructor	{
 			const suffix s = ~P[i];
 			if(static_cast<t_index>(s-1) >= NL)
 				continue;
-#			ifdef INDUCE_ALT
-			t_index &pr = R[data[s]];
-			if(pr>i)	{
-				P[pr++] = ~(s+1);
-#			else
 			const T cur = data[s];
 			if(data[s-1] <= cur)		{
 				P[R[cur]++] = ~(s+1);
-#			endif
 				assert(R[data[s]] <= RE[data[s]]);
 				P[i] = s;	//clear mask
 			}
@@ -200,25 +194,70 @@ class	Constructor	{
 			const suffix s = ~P[--i];
 			if(static_cast<t_index>(s-1) >= NL)
 				continue;
-#			ifdef INDUCE_ALT
-			t_index &pr = RE[data[s]];
-			if(pr<=i)		{
-				P[--pr] = ~(s+1);
-#			else
 			const T cur = data[s];
 			if(data[s-1] >= cur)		{
 				P[--RE[cur]] = ~(s+1);
-#			endif
 				assert(R[data[s]] <= RE[data[s]]);
 				P[i] = s;	//clear mask
 			}
 		}while(i);
 	}
 
+	void induce_alt()	{
+		const t_index NL = N-1U;
+		t_index i;
+		T prev; suffix *pr=NULL;
+		assert(N);
+		//left2right
+		buckets();
+		pr = P + R[prev=0];
+		for(i=0; i!=N; ++i)	{
+			const suffix s = ~P[i];
+			if(static_cast<t_index>(s-1) >= NL)
+				continue;
+			const T cur = data[s];
+			if(data[s-1] <= cur)		{
+				if(cur != prev)	{
+					R[prev] = pr-P;
+					pr = P + R[prev=cur];
+				}
+				//P[R[cur]++] = ~(s+1);
+				*pr++ = ~(s+1);
+				assert(R[data[s]] <= RE[data[s]]);
+				P[i] = s;	//clear mask
+			}
+		}
+		//right2left
+		buckets();
+		P[--RE[data[0]]] = ~1;
+		pr = P + RE[prev=0];
+		i=N; do	{
+			const suffix s = ~P[--i];
+			if(static_cast<t_index>(s-1) >= NL)
+				continue;
+			const T cur = data[s];
+			if(data[s-1] >= cur)		{
+				if(cur != prev)	{
+					RE[prev] = pr-P;
+					pr = P + RE[prev=cur];
+				}
+				//P[--RE[cur]] = ~(s+1);
+				*--pr = ~(s+1);
+				assert(R[data[s]] <= RE[data[s]]);
+				P[i] = s;	//clear mask
+			}
+		}while(i);
+	}
+
+	void induce()	{
+		induce_alt();
+	}
+
+
 	// find the length of each LMS substring
 	// and write it into P[n1+1+(x>>1)]
 	// no collisions guaranteed because LMS distance>=2
-	void computeTargetLengths_1()	{
+	void computeTargetLengths()	{
 		if(!n1)
 			return;
 		suffix *const s1 = P+n1;
@@ -235,7 +274,7 @@ class	Constructor	{
 		}
 	}
 
-	void reduce_1()	{
+	void reduce()	{
 		assert(!n1 && N);
 		// scatter LMS into bucket positions
 		memset( P, 0, N*sizeof(suffix) );
@@ -258,12 +297,12 @@ class	Constructor	{
 		}
 
 		// sort by induction (evil technology!)
-		induce_1();
+		induce();
 
 		// scatter into indices and values
 		packTargetIndices();
 		memset( P+n1, 0, (N-n1)*sizeof(suffix) );
-		computeTargetLengths_1();
+		computeTargetLengths();
 		computeTargetValues();
 	}
 
@@ -312,7 +351,7 @@ class	Constructor	{
 		}
 	}
 
-	void derive_1()	{
+	void derive()	{
 		t_index i,j;
 		memcpy( P, P+d1, n1*sizeof(suffix) );
 		suffix *const s1 = P+n1;
@@ -350,7 +389,8 @@ class	Constructor	{
 			assert(pr[0] >= i		&& "Not sorted properly!");
 		}
 		// induce the rest of suffixes
-		induce_1();
+		induce();
+		// fix the negatives
 		for(i=0; i!=N; ++i)	{
 			if(P[i]<0)
 				P[i] = ~P[i];
@@ -377,7 +417,7 @@ public:
 		return;
 #		endif
 		// reduce the problem to LMS sorting
-		reduce_1();
+		reduce();
 		// solve the reduced problem
 #		ifndef SAIS_COMPARE
 		if(name<=0x100)
@@ -388,7 +428,7 @@ public:
 #		endif
 			solve<unsigned>(reserved);
 		// derive all other suffixes
-		derive_1();
+		derive();
 	}
 };
 
