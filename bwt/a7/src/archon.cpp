@@ -317,8 +317,7 @@ class	Constructor	{
 		t_index i=0;
 		memcpy( P, P+d1, n1*sizeof(suffix) );
 		suffix *const s1 = P+n1;
-		if(R2)
-			memset( R, 0, K*sizeof(t_index) );
+		memset( R, 0, K*sizeof(t_index) );
 		// get the list of LMS strings into [n1,2*n1]
 		// LMS number -> actual string number
 		//note: going left to right here!
@@ -340,15 +339,15 @@ class	Constructor	{
 			P[i] = s1[P[i]-1];
 		}
 		// scatter LMS back into proper positions
-		// todo: use memcpy and memset if memory allows
 		if(R2)	{
+			R2[-1] = 0;	// either unoccupied or R[K], which we don't use
+			t_index top = N;
 			suffix *x = P+n1;
-			for(i=K; i--; )	{
+			for(i=K; i--; top=R2[i-1])	{
 				const int num = R[i];
 				if(!num)
 					continue;
-				const t_index top = (i+1==K ? N : R2[i]);
-				const t_index bot = (i ? R2[i-1] : 0);
+				const t_index bot = R2[i-1];		// -1 is OK here
 				const t_index space = top-bot-num;
 				for(int j=0; ++j<=num;)
 					P[top-j] = ~*--x;
