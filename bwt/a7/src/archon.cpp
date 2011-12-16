@@ -317,6 +317,8 @@ class	Constructor	{
 		t_index i=0;
 		memcpy( P, P+d1, n1*sizeof(suffix) );
 		suffix *const s1 = P+n1;
+		if(R2)
+			memset( R, 0, K*sizeof(t_index) );
 		// get the list of LMS strings into [n1,2*n1]
 		// LMS number -> actual string number
 		//note: going left to right here!
@@ -324,6 +326,7 @@ class	Constructor	{
 			do	{ ++i; assert(i<N);
 			}while(data[i-1] >= data[i]);
 			s1[j] = i;
+			++R[data[i-1]];
 			if(++j==n1)
 				break;
 			do	{ ++i; assert(i<N);
@@ -331,29 +334,47 @@ class	Constructor	{
 		}
 		// update the indices in the sorted array
 		// LMS t_index -> string t_index
-		for(i=0; i<n1; ++i)	{
+		//todo: try to combine with the next pass
+		for(i=0; i!=n1; ++i)	{
 			assert( P[i]>0 && P[i]<=(suffix)n1 );
 			P[i] = s1[P[i]-1];
 		}
 		// scatter LMS back into proper positions
-		buckets();
-		//option: generate buckets again here
-		// but make R2 static
-		memset( P+n1, 0, (N-n1)*sizeof(suffix) );
-		T prev_sym = K-1;
-		suffix *pr = P+RE[prev_sym];
-		for(i=n1; i--; )	{
-			const suffix suf = P[i];
-			P[i] = 0;
-			assert(suf>0 && suf<=(suffix)N	&& "Invalid suffix!");
-			const T cur = data[suf-1];
-			if(cur != prev_sym)	{
-				assert(cur<prev_sym		&& "Not sorted!");
-				pr = P + RE[prev_sym=cur];
+		// todo: use memcpy and memset if memory allows
+		if(R2)	{
+			suffix *x = P+n1;
+			for(i=K; i--; )	{
+				const int num = R[i];
+				if(!num)
+					continue;
+				const t_index top = (i+1==K ? N : R2[i]);
+				const t_index bot = (i ? R2[i-1] : 0);
+				const t_index space = top-bot-num;
+				for(int j=0; ++j<=num;)
+					P[top-j] = ~*--x;
+				//memcpy( P+top-num, x-num, num*sizeof(suffix) );
+				//x -= num;
+				memset( P+bot, 0, space*sizeof(suffix) );
 			}
-			*--pr = ~suf;
-			assert(RE[cur] >= R[cur] 	&& "Stepped twice on the same suffix!");
-			assert(RE[cur] >= i			&& "Not sorted properly!");
+			assert( x==P );
+		}else	{
+			buckets();
+			memset( P+n1, 0, (N-n1)*sizeof(suffix) );
+			T prev_sym = K-1;
+			suffix *pr = P + RE[prev_sym];
+			for(i=n1; i--; )	{
+				const suffix suf = P[i];
+				P[i] = 0;
+				assert(suf>0 && suf<=(suffix)N	&& "Invalid suffix!");
+				const T cur = data[suf-1];
+				if(cur != prev_sym)	{
+					assert(cur<prev_sym			&& "Not sorted!");
+					pr = P + RE[prev_sym=cur];
+				}
+				*--pr = ~suf;
+				assert(RE[cur] >= R[cur] 	&& "Stepped twice on the same suffix!");
+				assert(RE[cur] >= i			&& "Not sorted properly!");
+			}
 		}
 		// induce the rest of suffixes
 		induce();
