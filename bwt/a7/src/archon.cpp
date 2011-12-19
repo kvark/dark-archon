@@ -1,5 +1,5 @@
 #include <assert.h>
-#include <memory.h>
+#include <string.h>
 #include <stdio.h>
 
 #include "archon.h"
@@ -394,14 +394,12 @@ class	Constructor	{
 			t_index top = N;
 			suffix *x = P+n1;
 			for(i=K; i--; top=R2[i-1])	{
-				const int num = R[i];
-				const t_index bot = R2[i-1];		// -1 is OK here
+				const t_index num = R[i];
+				const t_index bot = R2[i-1];		// arg -1 is OK here
 				const t_index space = top-bot-num;
-				for(int j=0; ++j<=num;)
-					P[top-j] = *--x;
-				//memcpy( P+top-num, x-num, num*sizeof(suffix) );
-				//x -= num;
-				memset( P+bot, 0, space*sizeof(suffix) );
+				x -= num;
+				memmove( P+top-num, x, num	*sizeof(suffix) );
+				memset( P+bot, 0, space		*sizeof(suffix) );
 			}
 			assert( x==P );
 		}else	{
@@ -425,12 +423,6 @@ class	Constructor	{
 		}
 		// induce the rest of suffixes
 		induce_post();
-		//induce();
-		// fix the negatives
-		/*for(i=0; i!=N; ++i)	{
-			if(P[i]<0)
-				P[i] = ~P[i];
-		}*/
 	}
 
 	//---------------------------------
