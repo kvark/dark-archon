@@ -425,7 +425,14 @@ public:
 //	INITIALIZATION	//
 
 t_index Archon::estimateReserve(const t_index n)	{
-	return 0x10001;
+	t_index total = 0x10000;
+#	ifndef NO_SQUEEZE
+	if(!(n>>17))
+		total = n/4+1;
+	if(total<0x200)
+		total = 0x200;
+#	endif
+	return total+1;
 }
 
 Archon::Archon(const t_index Nx)
