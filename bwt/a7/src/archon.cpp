@@ -132,7 +132,8 @@ class	Constructor	{
 		for(j=i=0; ;++i)	{
 			assert(i<N);
 			const suffix s = ~P[i];
-			if(static_cast<t_index>(s) < N)	{
+			if(s>=0 && s!=N)	{
+				//todo: make sure s!=N here
 				P[j] = s;
 				if(++j == n1)
 					break;
@@ -172,7 +173,6 @@ class	Constructor	{
 	// if R2 is available
 
 	void induce()	{
-		const t_index NL = N-1U;
 		t_index i;
 		T prev; suffix *pr=NULL;
 		assert(N);
@@ -181,7 +181,7 @@ class	Constructor	{
 		pr = P + R[prev=0];
 		for(i=0; i!=N; ++i)	{
 			const suffix s = ~P[i];
-			if(static_cast<t_index>(s-1) >= NL)
+			if(s<=0 || s==N)
 				continue;
 			const T cur = data[s];
 			if(data[s-1] <= cur)		{
@@ -200,7 +200,7 @@ class	Constructor	{
 		*--pr = ~1;
 		i=N; do	{
 			const suffix s = ~P[--i];
-			if(static_cast<t_index>(s-1) >= NL)
+			if(s<=0 || s==N)
 				continue;
 			const T cur = data[s];
 			if(data[s-1] >= cur)		{
@@ -216,7 +216,6 @@ class	Constructor	{
 	}
 
 	void induce_post()	{
-		const t_index NL = N-1U;
 		t_index i;
 		T prev; suffix *pr=NULL;
 		assert(N);
