@@ -215,6 +215,56 @@ class	Constructor	{
 		}while(i);
 	}
 
+	void induce_post()	{
+		const t_index NL = N-1U;
+		t_index i;
+		T prev; suffix *pr=NULL;
+		assert(N);
+		//left2right
+		buckets();
+		pr = P + R[prev=0];
+		for(i=0; i!=N; ++i)	{
+			const suffix s = P[i];
+			if(!s)
+				continue;
+			P[i] = ~s;
+			if(s<0 || s==N)
+				continue;
+			const T cur = data[s];
+			assert( data[s-1] <= cur );
+			if(cur != prev)	{
+				R[prev] = pr-P;
+				pr = P + R[prev=cur];
+			}
+			assert( pr>P+i && pr<P+RE[cur] );
+			const suffix q = s+1;
+			*pr++ = (q==N || cur>data[q] ? ~q:q);
+		}
+		//right2left
+		buckets();
+		pr = P + RE[prev=data[0]];
+		*--pr = (prev<data[1] ? ~1 : 1);
+		i=N; do	{
+			const suffix s = P[--i];
+			if(s<0)	{
+				P[i] = ~s;
+				continue;
+			}
+			if(s==N)
+				continue;
+			assert(s);
+			const T cur = data[s];
+			assert( data[s-1] >= cur );
+			if(cur != prev)	{
+				RE[prev] = pr-P;
+				pr = P + RE[prev=cur];
+			}
+			assert( pr>P+R[cur] && pr<=P+i );
+			const suffix q = s+1;
+			*--pr = (q!=N && cur<data[q] ? ~q:q);	
+		}while(i);
+	}
+
 	// find the length of each LMS substring
 	// and write it into P[n1+(x>>1)]
 	// no collisions guaranteed because LMS distance>=2
@@ -345,12 +395,10 @@ class	Constructor	{
 			suffix *x = P+n1;
 			for(i=K; i--; top=R2[i-1])	{
 				const int num = R[i];
-				if(!num)
-					continue;
 				const t_index bot = R2[i-1];		// -1 is OK here
 				const t_index space = top-bot-num;
 				for(int j=0; ++j<=num;)
-					P[top-j] = ~*--x;
+					P[top-j] = *--x;
 				//memcpy( P+top-num, x-num, num*sizeof(suffix) );
 				//x -= num;
 				memset( P+bot, 0, space*sizeof(suffix) );
@@ -370,18 +418,19 @@ class	Constructor	{
 					assert(cur<prev_sym			&& "Not sorted!");
 					pr = P + RE[prev_sym=cur];
 				}
-				*--pr = ~suf;
+				*--pr = suf;
 				assert(RE[cur] >= R[cur] 	&& "Stepped twice on the same suffix!");
 				assert(RE[cur] >= i			&& "Not sorted properly!");
 			}
 		}
 		// induce the rest of suffixes
-		induce();
+		induce_post();
+		//induce();
 		// fix the negatives
-		for(i=0; i!=N; ++i)	{
+		/*for(i=0; i!=N; ++i)	{
 			if(P[i]<0)
 				P[i] = ~P[i];
-		}
+		}*/
 	}
 
 	//---------------------------------
