@@ -132,8 +132,8 @@ class	Constructor	{
 		for(j=i=0; ;++i)	{
 			assert(i<N);
 			const suffix s = ~P[i];
-			if(s>=0 && s!=N)	{
-				//todo: make sure s!=N here
+			if(s>=0)	{
+				assert( s!=N );
 				P[j] = s;
 				if(++j == n1)
 					break;
@@ -168,11 +168,10 @@ class	Constructor	{
 	//---------------------------------
 	//	Strategy-1 implementation	//
 
-	// here is the slowest part of the method!
 	//todo: use buckets to traverse the SA efficiently
 	// if R2 is available
 
-	void induce()	{
+	void induce_pre()	{
 		t_index i;
 		T prev; suffix *pr=NULL;
 		assert(N);
@@ -180,38 +179,41 @@ class	Constructor	{
 		buckets();
 		pr = P + R[prev=0];
 		for(i=0; i!=N; ++i)	{
-			const suffix s = ~P[i];
-			if(s<=0 || s==N)
+			const suffix s = P[i];
+			if(s<=0 || s==N)	{
+				if(s<0)
+					P[i] = ~s;
 				continue;
-			const T cur = data[s];
-			if(data[s-1] <= cur)		{
-				if(cur != prev)	{
-					R[prev] = pr-P;
-					pr = P + R[prev=cur];
-				}
-				*pr++ = ~(s+1);
-				assert(R[data[s]] <= RE[data[s]]);
-				P[i] = s;	//clear mask
 			}
+			P[i] = 0;
+			const T cur = data[s];
+			assert( data[s-1] <= cur );
+			if(cur != prev)	{
+				R[prev] = pr-P;
+				pr = P + R[prev=cur];
+			}
+			assert( pr>P+i && pr<P+RE[cur] );
+			const suffix q = s+1;
+			*pr++ = (q==N || cur>data[q] ? ~q:q);
 		}
 		//right2left
 		buckets();
 		pr = P + RE[prev=data[0]];
-		*--pr = ~1;
+		*--pr = (prev<data[1] ? ~1 : 1);
 		i=N; do	{
-			const suffix s = ~P[--i];
+			const suffix s = P[--i];
 			if(s<=0 || s==N)
 				continue;
+			//P[i] = 0;
 			const T cur = data[s];
-			if(data[s-1] >= cur)		{
-				if(cur != prev)	{
-					RE[prev] = pr-P;
-					pr = P + RE[prev=cur];
-				}
-				*--pr = ~(s+1);
-				assert(R[data[s]] <= RE[data[s]]);
-				P[i] = s;	//clear mask
+			assert( data[s-1] >= cur );
+			if(cur != prev)	{
+				RE[prev] = pr-P;
+				pr = P + RE[prev=cur];
 			}
+			assert( pr>P+R[cur] && pr<=P+i );
+			const suffix q = s+1;
+			*--pr = (q!=N && cur<data[q] ? ~q:q);
 		}while(i);
 	}
 
@@ -260,7 +262,7 @@ class	Constructor	{
 			}
 			assert( pr>P+R[cur] && pr<=P+i );
 			const suffix q = s+1;
-			*--pr = (q!=N && cur<data[q] ? ~q:q);	
+			*--pr = (q!=N && cur<data[q] ? ~q:q);
 		}while(i);
 	}
 
@@ -301,14 +303,14 @@ class	Constructor	{
 			}//up
 			if(!prevUp)	{ // found LMS!
 				++n1; prevUp = true; 
-				P[--RE[cur]] = ~(i+1);
+				P[--RE[cur]] = i+1;
 			}
 			if(!j)
 				break;
 		}
 
 		// sort by induction (evil technology!)
-		induce();
+		induce_pre();
 
 		// scatter into indices and values
 		packTargetIndices();
@@ -364,7 +366,7 @@ class	Constructor	{
 
 	void derive()	{
 		t_index i=0;
-		memcpy( P, P+d1, n1*sizeof(suffix) );
+		memmove( P, P+d1, n1*sizeof(suffix) );
 		suffix *const s1 = P+n1;
 		memset( R, 0, K*sizeof(t_index) );
 		// get the list of LMS strings into [n1,2*n1]
