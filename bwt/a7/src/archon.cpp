@@ -125,19 +125,13 @@ class	Constructor	{
 	}
 
 	void packTargetIndices()	{
-		t_index i,j;
 		// pack LMS into the first n1 suffixes
-		if(!n1)
-			return;
-		for(j=i=0; ;++i)	{
+		t_index i=-1,j=0;
+		while(j!=n1)	{
+			suffix s;
+			while((s=~P[++i])<0);
 			assert(i<N);
-			const suffix s = ~P[i];
-			if(s>=0)	{
-				assert( s!=N );
-				P[j] = s;
-				if(++j == n1)
-					break;
-			}
+			P[j++] = s;
 		}
 	}
 
@@ -295,7 +289,7 @@ class	Constructor	{
 			while(++i<N && data[i-1] >= data[i]);
 			if(i>=N)
 				break;
-			++n1;
+			++n1;	//found LMS!
 			P[--RE[data[i-1]]] = i;
 			while(++i<N && data[i-1] <= data[i]);
 		}
@@ -312,23 +306,18 @@ class	Constructor	{
 
 	template<typename Q>
 	void packTargetValues(Q *const input)	{
-		if(!n1)
-			return;
 		// number of words occupied by new data
 		d1 = 1 + (sizeof(Q)*n1-1) / sizeof(suffix);
 		assert(d1<=n1);
-		// pack values into [0,m1] and
-		// move suffixes into [m1,m1+n1]
-		suffix *const s1 = P+d1, *x=P+n1;
-		for(t_index j=0; ;++x)		{
-			const suffix val = *x;
-			assert( x<P+N );
-			if(val)	{
-				s1[j] = P[j];
-				input[j] = val-1U;
-				if(++j == n1)
-					break;
-			}
+		// pack values into [0,d1] and
+		// move suffixes into [d1,d1+n1]
+		t_index j, i=n1-1;
+		for(j=0; j!=n1; ++j)	{
+			suffix s;
+			while((s=P[++i])==0);
+			assert( i<N );
+			P[d1+j] = P[j];
+			input[j] = s-1U;
 		}
 	}
 
