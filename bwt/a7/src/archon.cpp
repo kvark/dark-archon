@@ -291,24 +291,15 @@ class	Constructor	{
 		// scatter LMS into bucket positions
 		memset( P, 0, N*sizeof(suffix) );
 		buckets();
-		//todo: optimize more
-		bool prevUp = true;
-		for(t_index j=N;;)	{
-			const t_index i = j-1;
-			const T cur = data[i];
-			while(--j && data[j-1U]==cur);
-			if(j && data[j-1U]<cur)	{
-				prevUp = false;
-				continue;
-			}//up
-			if(!prevUp)	{ // found LMS!
-				++n1; prevUp = true; 
-				P[--RE[cur]] = i+1;
-			}
-			if(!j)
+		for(t_index i=0; ; )	{
+			while(++i<N && data[i-1] >= data[i]);
+			if(i>=N)
 				break;
+			++n1;
+			P[--RE[data[i-1]]] = i;
+			while(++i<N && data[i-1] <= data[i]);
 		}
-
+	
 		// sort by induction (evil technology!)
 		induce_pre();
 
