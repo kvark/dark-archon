@@ -24,8 +24,8 @@ class	Constructor	{
 	t_index	name;			// new number of unique values
 
 	enum	{
-		MASK_DIRTY	= 1<<31,
-		MASK_SUF	= ~MASK_DIRTY
+		FLAG_LMS	= 1<<31,
+		MASK_SUF	= ~FLAG_LMS
 	};
 
 	//---------------------------------
@@ -134,7 +134,7 @@ class	Constructor	{
 		t_index i=-1,j=0;
 		while(j!=n1)	{
 			suffix s;
-			while(++i, assert(i<N), (s=P[i]^MASK_DIRTY) & MASK_DIRTY);
+			while(++i, assert(i<N), (s=P[i]^FLAG_LMS) & FLAG_LMS);
 			P[j++] = s;
 		}
 	}
@@ -181,7 +181,7 @@ class	Constructor	{
 		for(i=0; i!=N; ++i)	{
 			const suffix s = P[i];
 			// empty space is supposed to be flagged
-			if(s&MASK_DIRTY)	{
+			if(s&FLAG_LMS)	{
 				P[i] = s & MASK_SUF;
 				continue;
 			}
@@ -195,15 +195,15 @@ class	Constructor	{
 			}
 			assert( pr>P+i && pr<P+RE[cur] );
 			const suffix q = s+1;
-			*pr++ = (q==N ? MASK_DIRTY : q + (cur>data[q] ? MASK_DIRTY:0) );
+			*pr++ = (q==N ? FLAG_LMS : q + (cur>data[q] ? FLAG_LMS:0) );
 		}
 		//right2left
 		buckets();
 		pr = P + RE[prev=data[0]];
-		*--pr = 1 + (prev<data[1] ? MASK_DIRTY:0);
+		*--pr = 1 + (prev<data[1] ? FLAG_LMS:0);
 		i=N; do	{
 			const suffix s = P[--i];
-			if((s&MASK_DIRTY) || !s)
+			if((s&FLAG_LMS) || !s)
 				continue;
 			assert(s && s!=N);
 			//P[i] = 0;
@@ -215,7 +215,7 @@ class	Constructor	{
 			}
 			assert( pr>P+R[cur] && pr<=P+i );
 			const suffix q = s+1;
-			*--pr = (q==N ? 0 : q + (cur<data[q] ? MASK_DIRTY:0) );
+			*--pr = (q==N ? 0 : q + (cur<data[q] ? FLAG_LMS:0) );
 		}while(i);
 	}
 
@@ -230,8 +230,8 @@ class	Constructor	{
 			const suffix s = P[i];
 			if(!s)
 				continue;
-			P[i] = s ^ MASK_DIRTY;
-			if((s&MASK_DIRTY) || s==N)
+			P[i] = s ^ FLAG_LMS;
+			if((s&FLAG_LMS) || s==N)
 				continue;
 			const T cur = data[s];
 			assert( data[s-1] <= cur );
@@ -241,15 +241,15 @@ class	Constructor	{
 			}
 			assert( pr>P+i && pr<P+RE[cur] );
 			const suffix q = s+1;
-			*pr++ = q + (q==N || cur>data[q] ? MASK_DIRTY:0);
+			*pr++ = q + (q==N || cur>data[q] ? FLAG_LMS:0);
 		}
 		//right2left
 		buckets();
 		pr = P + RE[prev=data[0]];
-		*--pr = 1 + (prev<data[1] ? MASK_DIRTY:0);
+		*--pr = 1 + (prev<data[1] ? FLAG_LMS:0);
 		i=N; do	{
 			const suffix s = P[--i];
-			if((s&MASK_DIRTY) || s==N)	{
+			if((s&FLAG_LMS) || s==N)	{
 				P[i] = s&MASK_SUF;
 				continue;
 			}
@@ -262,7 +262,7 @@ class	Constructor	{
 			}
 			assert( pr>P+R[cur] && pr<=P+i );
 			const suffix q = s+1;
-			*--pr = q + (q!=N && cur<data[q] ? MASK_DIRTY:0);
+			*--pr = q + (q!=N && cur<data[q] ? FLAG_LMS:0);
 		}while(i);
 	}
 
@@ -288,7 +288,7 @@ class	Constructor	{
 		assert(!n1 && N);
 		// scatter LMS into bucket positions
 		for(t_index i=0; i!=N; ++i)
-			P[i] = MASK_DIRTY;
+			P[i] = FLAG_LMS;
 		buckets();
 		for(t_index i=0; ; )	{
 			do if(++i>=N)
