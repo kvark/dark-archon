@@ -129,6 +129,12 @@ class	Constructor	{
 			makeBuckets();
 	}
 
+	void fillEmpty(t_index off, t_index num)	{
+		//memset( P+off, 0, num*sizeof(suffix) );
+		while(num--)
+			P[off++] = FLAG_LMS;
+	}
+
 	void packTargetIndices()	{
 		// pack LMS into the first n1 suffixes
 		t_index i=-1,j=0;
@@ -169,7 +175,7 @@ class	Constructor	{
 	//todo: use buckets to traverse the SA efficiently
 	// if R2 is available
 
-	void induce_pre()	{
+	void inducePre()	{
 		// we are not interested in s==N here so
 		// we just skip it
 		t_index i;
@@ -219,7 +225,7 @@ class	Constructor	{
 		}while(i);
 	}
 
-	void induce_post()	{
+	void inducePost()	{
 		t_index i;
 		T prev; suffix *pr=NULL;
 		assert(N);
@@ -228,11 +234,10 @@ class	Constructor	{
 		pr = P + R[prev=0];
 		for(i=0; i!=N; ++i)	{
 			const suffix s = P[i];
-			if(!s)
-				continue;
 			P[i] = s ^ FLAG_LMS;
-			if((s&FLAG_LMS) || s==N)
+			if(s & FLAG_LMS)
 				continue;
+			assert(s && s!=N);
 			const T cur = data[s];
 			assert( data[s-1] <= cur );
 			if(cur != prev)	{
@@ -286,9 +291,8 @@ class	Constructor	{
 
 	void reduce()	{
 		assert(!n1 && N);
+		fillEmpty(0,N);
 		// scatter LMS into bucket positions
-		for(t_index i=0; i!=N; ++i)
-			P[i] = FLAG_LMS;
 		buckets();
 		for(t_index i=0; ; )	{
 			do if(++i>=N)
@@ -300,7 +304,7 @@ class	Constructor	{
 		}
 		finished:
 		// sort by induction (evil technology!)
-		induce_pre();
+		inducePre();
 
 		// scatter into indices and values
 		packTargetIndices();
@@ -383,12 +387,12 @@ class	Constructor	{
 				const t_index space = top-bot-num;
 				x -= num;
 				memmove( P+top-num, x, num	*sizeof(suffix) );
-				memset( P+bot, 0, space		*sizeof(suffix) );
+				fillEmpty(bot,space);
 			}
 			assert( x==P );
 		}else	{
 			buckets();
-			memset( P+n1, 0, (N-n1)*sizeof(suffix) );
+			fillEmpty(n1,N-n1);
 			T prev_sym = K-1;
 			suffix *pr = P + RE[prev_sym];
 			for(i=n1; i--; )	{
@@ -406,7 +410,7 @@ class	Constructor	{
 			}
 		}
 		// induce the rest of suffixes
-		induce_post();
+		inducePost();
 	}
 
 	//---------------------------------
