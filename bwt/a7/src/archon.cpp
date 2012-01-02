@@ -5,10 +5,13 @@
 #include "archon.h"
 
 
-//--------------------------------------------------------//
+//--------------------------------------------------------------------------//
 // This SAC implementation is derived from ideas explained here:
 // http://www.cs.sysu.edu.cn/nong/t_index.files/Two%20Efficient%20Algorithms%20for%20Linear%20Suffix%20Array%20Construction.pdf
-//--------------------------------------------------------//
+// It also uses some nice optimizations found in Yuta Mori version:
+// https://sites.google.com/site/yuta256/sais
+//--------------------------------------------------------------------------//
+
 
 template<typename T>
 class	Constructor	{
@@ -255,7 +258,7 @@ class	Constructor	{
 		i=N; do	{
 			const suffix s = P[--i];
 			if((s&FLAG_LMS) || s==N)	{
-				P[i] = s&MASK_SUF;
+				P[i] = s & MASK_SUF;
 				continue;
 			}
 			assert(s);
@@ -323,7 +326,7 @@ class	Constructor	{
 		t_index j, i=n1-1;
 		for(j=0; j!=n1; ++j)	{
 			suffix s;
-			while((s=P[++i])==0);
+			while( !(s=P[++i]) );
 			assert( i<N );
 			P[d1+j] = P[j];
 			input[j] = s-1U;
