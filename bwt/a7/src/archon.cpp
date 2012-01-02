@@ -22,7 +22,7 @@ class	Constructor	{
 			*const R2;		// radix backup
 	const	t_index N;		// input length
 	const	t_index K;		// number of unique values
-	t_index	n1;				// number of LMS
+	t_index	n1;				// number of LMS suffixes
 	t_index	d1;				// memory units occupied by the new data
 	t_index	name;			// new number of unique values
 
@@ -61,13 +61,15 @@ class	Constructor	{
 					if(s>=depth)	{
 						const T q = data[s-depth];
 						if(q <= w)	{
-							if(q != w) *y=*x,*x++=s;
+							if(q != w)
+								*y=*x,*x++=s;
 							if(++y == z)
 								break;
 							continue;
 						}
 					}
-					if(--z == y) break;
+					if(--z == y)
+						break;
 					*y=*z,*z=s;
 				}
 				y=z; z=A+num;
@@ -135,7 +137,7 @@ class	Constructor	{
 	void fillEmpty(t_index off, t_index num)	{
 		//memset( P+off, 0, num*sizeof(suffix) );
 		while(num--)
-			P[off++] = FLAG_LMS;
+			P[off+num] = FLAG_LMS;
 	}
 
 	void packTargetIndices()	{
