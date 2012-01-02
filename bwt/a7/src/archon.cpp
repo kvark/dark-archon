@@ -140,6 +140,23 @@ class	Constructor	{
 			P[off+num] = FLAG_LMS;
 	}
 
+	template<class X>
+	void parseLMS(const X &x)	{
+		if(!n1)
+			return;
+		t_index i=0,k=0;
+		for(;;)	{
+			while(++i, assert(i<N), data[i-1] >= data[i]);
+			x.parse(k,i);
+			if(++k == n1)
+				break;
+			while(++i, assert(i<N), data[i-1] <= data[i]);
+		}
+	}
+
+	//---------------------------------
+	//	Intermediate routines	//
+
 	void packTargetIndices()	{
 		// pack LMS into the first n1 suffixes
 		t_index i=-1,j=0;
@@ -279,20 +296,19 @@ class	Constructor	{
 	// find the length of each LMS substring
 	// and write it into P[n1+(x>>1)]
 	// no collisions guaranteed because LMS distance>=2
-	void computeTargetLengths()	{
-		if(!n1)
-			return;
-		suffix *const s1 = P+n1;
-		t_index i=0,j=0,k=0;	// using area of P[n1,N)
-		for(;;)	{
-			while(++i, assert(i<N), data[i-1] >= data[i]);
-			s1[i>>1] = i-j;	//length
-			j = i;
-			if(++k == n1)
-				break;
-			while(++i, assert(i<N), data[i-1] <= data[i]);
+
+	struct XTargetLength	{
+		suffix *const target;
+		mutable t_index last;
+		
+		XTargetLength(suffix *const s1)
+		: target(s1), last(0)	{}
+
+		void parse(t_index k, t_index i) const	{
+			target[i>>1] = i-last;	//length
+			last = i;
 		}
-	}
+	};
 
 	void reduce()	{
 		assert(!n1 && N);
@@ -314,7 +330,7 @@ class	Constructor	{
 		// scatter into indices and values
 		packTargetIndices();
 		memset( P+n1, 0, (N-n1)*sizeof(suffix) );
-		computeTargetLengths();
+		parseLMS( XTargetLength(P+n1) );
 		computeTargetValues();
 	}
 
@@ -358,28 +374,52 @@ class	Constructor	{
 		}
 	}
 
+	//	Derivation helper classes
+
+	struct XListBad	{
+		suffix *const target;
+
+		XListBad(suffix *const s1)
+		: target(s1)	{}
+
+		void parse(t_index k, t_index i) const	{
+			target[k] = i;
+		}
+	};
+
+	struct XListGood : public XListBad	{
+		t_index *const freq;
+		const T* const input;
+
+		XListGood(suffix *const s1, t_index *const R, t_index K, const T *const data)
+		: XListBad(s1), freq(R), input(data-1)	{
+			memset( freq, 0, K*sizeof(t_index) );
+		}
+
+		void parse(t_index k, t_index i) const	{
+			XListBad::parse(k,i);
+			++freq[input[i]];
+		}
+	};
+
+
 	void derive()	{
 		t_index i=0;
 		memmove( P, P+d1, n1*sizeof(suffix) );
-		suffix *const s1 = P+n1;
-		memset( R, 0, K*sizeof(t_index) );
 		// get the list of LMS strings into [n1,2*n1]
 		// LMS number -> actual string number
-		//note: going left to right here!
-		for(t_index j=0; ; )	{
-			while(++i, assert(i<N), data[i-1] >= data[i]);
-			s1[j] = i;
-			++R[data[i-1]];
-			if(++j==n1)
-				break;
-			while(++i, assert(i<N), data[i-1] <= data[i]);
-		}
+		if(R2)
+			parseLMS( XListGood(P+n1,R,K,data) );
+		else
+			parseLMS( XListBad(P+n1) );
+		
 		// update the indices in the sorted array
 		// LMS t_index -> string t_index
 		//todo: try to combine with the next pass
+		suffix *const s2 = P+n1-1;
 		for(i=0; i!=n1; ++i)	{
 			assert( P[i]>0 && P[i]<=(suffix)n1 );
-			P[i] = s1[P[i]-1];
+			P[i] = s2[P[i]];
 		}
 		// scatter LMS back into proper positions
 		if(R2)	{
