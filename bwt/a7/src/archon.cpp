@@ -23,6 +23,11 @@ class	Constructor	{
 	t_index	d1;				// memory units occupied by the new data
 	t_index	name;			// new number of unique values
 
+	enum	{
+		MASK_DIRTY	= 1<<31,
+		MASK_SUF	= ~MASK_DIRTY
+	};
+
 	//---------------------------------
 	//	Strategy-0 implementation	//
 
@@ -129,7 +134,7 @@ class	Constructor	{
 		t_index i=-1,j=0;
 		while(j!=n1)	{
 			suffix s;
-			while((s=~P[++i])<0);
+			while((s=P[++i]^MASK_DIRTY) & MASK_DIRTY);
 			assert(i<N);
 			P[j++] = s;
 		}
@@ -146,10 +151,11 @@ class	Constructor	{
 			assert(cur_len);
 			//todo: work around the jump
 			if(cur_len == prev_len)	{
-				suffix j=1; do	{
+				suffix j = 1;
+				do	{
 					if(data[cur-j] != data[prev-j])
 						goto greater;
-				}while(++j <= cur_len);
+				}while(++j<=cur_len);
 			}else	{
 				greater:	//warning!
 				++name; prev = cur;
@@ -174,11 +180,11 @@ class	Constructor	{
 		pr = P + R[prev=0];
 		for(i=0; i!=N; ++i)	{
 			const suffix s = P[i];
-			if(s<=0 || s==N)	{
-				if(s<0)
-					P[i] = ~s;
+			if((s&MASK_DIRTY) || s==0)	{
+				P[i] = s & MASK_SUF;
 				continue;
 			}
+			assert(s!=N);
 			P[i] = 0;
 			const T cur = data[s];
 			assert( data[s-1] <= cur );
@@ -188,15 +194,15 @@ class	Constructor	{
 			}
 			assert( pr>P+i && pr<P+RE[cur] );
 			const suffix q = s+1;
-			*pr++ = (q==N || cur>data[q] ? ~q:q);
+			*pr++ = q + (q==N || cur>data[q] ? MASK_DIRTY:0);
 		}
 		//right2left
 		buckets();
 		pr = P + RE[prev=data[0]];
-		*--pr = (prev<data[1] ? ~1 : 1);
+		*--pr = (prev<data[1] ? 1+MASK_DIRTY : 1);
 		i=N; do	{
 			const suffix s = P[--i];
-			if(s<=0 || s==N)
+			if((s&MASK_DIRTY) || s==0 || s==N)
 				continue;
 			//P[i] = 0;
 			const T cur = data[s];
@@ -207,7 +213,7 @@ class	Constructor	{
 			}
 			assert( pr>P+R[cur] && pr<=P+i );
 			const suffix q = s+1;
-			*--pr = (q!=N && cur<data[q] ? ~q:q);
+			*--pr = q + (q!=N && cur<data[q] ? MASK_DIRTY:0);
 		}while(i);
 	}
 
@@ -222,8 +228,8 @@ class	Constructor	{
 			const suffix s = P[i];
 			if(!s)
 				continue;
-			P[i] = ~s;
-			if(s<0 || s==N)
+			P[i] = s ^ MASK_DIRTY;
+			if((s&MASK_DIRTY) || s==N)
 				continue;
 			const T cur = data[s];
 			assert( data[s-1] <= cur );
@@ -233,20 +239,18 @@ class	Constructor	{
 			}
 			assert( pr>P+i && pr<P+RE[cur] );
 			const suffix q = s+1;
-			*pr++ = (q==N || cur>data[q] ? ~q:q);
+			*pr++ = q + (q==N || cur>data[q] ? MASK_DIRTY:0);
 		}
 		//right2left
 		buckets();
 		pr = P + RE[prev=data[0]];
-		*--pr = (prev<data[1] ? ~1 : 1);
+		*--pr = (prev<data[1] ? 1+MASK_DIRTY : 1);
 		i=N; do	{
 			const suffix s = P[--i];
-			if(s<0)	{
-				P[i] = ~s;
+			if((s&MASK_DIRTY) || s==N)	{
+				P[i] = s&MASK_SUF;
 				continue;
 			}
-			if(s==N)
-				continue;
 			assert(s);
 			const T cur = data[s];
 			assert( data[s-1] >= cur );
@@ -256,7 +260,7 @@ class	Constructor	{
 			}
 			assert( pr>P+R[cur] && pr<=P+i );
 			const suffix q = s+1;
-			*--pr = (q!=N && cur<data[q] ? ~q:q);
+			*--pr = q + (q!=N && cur<data[q] ? MASK_DIRTY:0);
 		}while(i);
 	}
 
