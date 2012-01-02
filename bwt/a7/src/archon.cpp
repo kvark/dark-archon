@@ -176,7 +176,6 @@ class	Constructor	{
 			const suffix cur = P[i];
 			suffix &cur_len = s1[cur>>1];
 			assert(cur_len);
-			//todo: work around the jump
 			if(cur_len == prev_len)	{
 				suffix j = 1;
 				do if(data[cur-j] != data[prev-j])
@@ -389,7 +388,7 @@ class	Constructor	{
 
 	struct XListGood : public XListBad	{
 		t_index *const freq;
-		const T* const input;
+		const T *const input;
 
 		XListGood(suffix *const s1, t_index *const R, t_index K, const T *const data)
 		: XListBad(s1), freq(R), input(data-1)	{
@@ -404,7 +403,6 @@ class	Constructor	{
 
 
 	void derive()	{
-		t_index i=0;
 		memmove( P, P+d1, n1*sizeof(suffix) );
 		// get the list of LMS strings into [n1,2*n1]
 		// LMS number -> actual string number
@@ -412,27 +410,29 @@ class	Constructor	{
 			parseLMS( XListGood(P+n1,R,K,data) );
 		else
 			parseLMS( XListBad(P+n1) );
-		
-		// update the indices in the sorted array
-		// LMS t_index -> string t_index
-		//todo: try to combine with the next pass
-		suffix *const s2 = P+n1-1;
-		for(i=0; i!=n1; ++i)	{
-			assert( P[i]>0 && P[i]<=(suffix)n1 );
-			P[i] = s2[P[i]];
+		{
+			// update the indices in the sorted array
+			// LMS t_index -> string t_index
+			//todo: try to combine with the next pass
+			suffix *const s2 = P+n1-1;
+			for(t_index i=0; i!=n1; ++i)	{
+				assert( P[i]>0 && P[i]<=(suffix)n1 );
+				P[i] = s2[P[i]];
+			}
 		}
 		// scatter LMS back into proper positions
 		if(R2)	{
 			R2[-1] = 0;	// either unoccupied or R[K], which we don't use
-			t_index top = N;
+			t_index top = N, i=K;
 			suffix *x = P+n1;
-			for(i=K; i--; top=R2[i-1])	{
+			while(i--)	{
 				const t_index num = R[i];
 				const t_index bot = R2[i-1];		// arg -1 is OK here
 				const t_index space = top-bot-num;
 				x -= num;
 				memmove( P+top-num, x, num	*sizeof(suffix) );
 				fillEmpty(bot,space);
+				top = bot;
 			}
 			assert( x==P );
 		}else	{
@@ -440,7 +440,7 @@ class	Constructor	{
 			fillEmpty(n1,N-n1);
 			T prev_sym = K-1;
 			suffix *pr = P + RE[prev_sym];
-			for(i=n1; i--; )	{
+			for(t_index i=n1; i--; )	{
 				const suffix suf = P[i];
 				P[i] = 0;
 				assert(suf>0 && suf<=(suffix)N	&& "Invalid suffix!");
@@ -466,7 +466,7 @@ public:
 	: data(_data), P(_P), R(reinterpret_cast<t_index*>(_P+_N)), RE(R+1)
 	, R2(reserved>=_K*2 ? reinterpret_cast<t_index*>(_P+_N+reserved-_K+1) : NULL)
 	, N(_N), K(_K), n1(0), d1(0), name(0)	{
-		assert( N>0 && K<reserved );
+		assert( N>0 && K>0 && K<reserved );
 		checkData();
 		if(R2)	{
 			assert(R2 >= R+K+1);
