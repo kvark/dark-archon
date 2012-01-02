@@ -134,8 +134,7 @@ class	Constructor	{
 		t_index i=-1,j=0;
 		while(j!=n1)	{
 			suffix s;
-			while((s=P[++i]^MASK_DIRTY) & MASK_DIRTY);
-			assert(i<N);
+			while(++i, assert(i<N), (s=P[i]^MASK_DIRTY) & MASK_DIRTY);
 			P[j++] = s;
 		}
 	}
@@ -152,10 +151,9 @@ class	Constructor	{
 			//todo: work around the jump
 			if(cur_len == prev_len)	{
 				suffix j = 1;
-				do	{
-					if(data[cur-j] != data[prev-j])
-						goto greater;
-				}while(++j<=cur_len);
+				do if(data[cur-j] != data[prev-j])
+					goto greater;
+				while(++j<=cur_len);
 			}else	{
 				greater:	//warning!
 				++name; prev = cur;
@@ -172,6 +170,8 @@ class	Constructor	{
 	// if R2 is available
 
 	void induce_pre()	{
+		// we are not interested in s==N here so
+		// we just skip it
 		t_index i;
 		T prev; suffix *pr=NULL;
 		assert(N);
@@ -180,11 +180,12 @@ class	Constructor	{
 		pr = P + R[prev=0];
 		for(i=0; i!=N; ++i)	{
 			const suffix s = P[i];
-			if((s&MASK_DIRTY) || s==0)	{
+			// empty space is supposed to be flagged
+			if(s&MASK_DIRTY)	{
 				P[i] = s & MASK_SUF;
 				continue;
 			}
-			assert(s!=N);
+			assert(s && s!=N);
 			P[i] = 0;
 			const T cur = data[s];
 			assert( data[s-1] <= cur );
@@ -194,16 +195,17 @@ class	Constructor	{
 			}
 			assert( pr>P+i && pr<P+RE[cur] );
 			const suffix q = s+1;
-			*pr++ = q + (q==N || cur>data[q] ? MASK_DIRTY:0);
+			*pr++ = (q==N ? MASK_DIRTY : q + (cur>data[q] ? MASK_DIRTY:0) );
 		}
 		//right2left
 		buckets();
 		pr = P + RE[prev=data[0]];
-		*--pr = (prev<data[1] ? 1+MASK_DIRTY : 1);
+		*--pr = 1 + (prev<data[1] ? MASK_DIRTY:0);
 		i=N; do	{
 			const suffix s = P[--i];
-			if((s&MASK_DIRTY) || s==0 || s==N)
+			if((s&MASK_DIRTY) || !s)
 				continue;
+			assert(s && s!=N);
 			//P[i] = 0;
 			const T cur = data[s];
 			assert( data[s-1] >= cur );
@@ -213,7 +215,7 @@ class	Constructor	{
 			}
 			assert( pr>P+R[cur] && pr<=P+i );
 			const suffix q = s+1;
-			*--pr = q + (q!=N && cur<data[q] ? MASK_DIRTY:0);
+			*--pr = (q==N ? 0 : q + (cur<data[q] ? MASK_DIRTY:0) );
 		}while(i);
 	}
 
@@ -244,7 +246,7 @@ class	Constructor	{
 		//right2left
 		buckets();
 		pr = P + RE[prev=data[0]];
-		*--pr = (prev<data[1] ? 1+MASK_DIRTY : 1);
+		*--pr = 1 + (prev<data[1] ? MASK_DIRTY:0);
 		i=N; do	{
 			const suffix s = P[--i];
 			if((s&MASK_DIRTY) || s==N)	{
@@ -273,31 +275,30 @@ class	Constructor	{
 		suffix *const s1 = P+n1;
 		t_index i=0,j=0,k=0;	// using area of P[n1,N)
 		for(;;)	{
-			do	{ ++i; assert(i<N);
-			}while(data[i-1] >= data[i]);
+			while(++i, assert(i<N), data[i-1] >= data[i]);
 			s1[i>>1] = i-j;	//length
 			j = i;
 			if(++k == n1)
 				break;
-			do	{ ++i; assert(i<N);
-			}while(data[i-1] <= data[i]);
+			while(++i, assert(i<N), data[i-1] <= data[i]);
 		}
 	}
 
 	void reduce()	{
 		assert(!n1 && N);
 		// scatter LMS into bucket positions
-		memset( P, 0, N*sizeof(suffix) );
+		for(t_index i=0; i!=N; ++i)
+			P[i] = MASK_DIRTY;
 		buckets();
 		for(t_index i=0; ; )	{
-			while(++i<N && data[i-1] >= data[i]);
-			if(i>=N)
-				break;
+			do if(++i>=N)
+				goto finished;
+			while(data[i-1] >= data[i]);
 			++n1;	//found LMS!
 			P[--RE[data[i-1]]] = i;
 			while(++i<N && data[i-1] <= data[i]);
 		}
-	
+		finished:
 		// sort by induction (evil technology!)
 		induce_pre();
 
@@ -357,14 +358,12 @@ class	Constructor	{
 		// LMS number -> actual string number
 		//note: going left to right here!
 		for(t_index j=0; ; )	{
-			do	{ ++i; assert(i<N);
-			}while(data[i-1] >= data[i]);
+			while(++i, assert(i<N), data[i-1] >= data[i]);
 			s1[j] = i;
 			++R[data[i-1]];
 			if(++j==n1)
 				break;
-			do	{ ++i; assert(i<N);
-			}while(data[i-1] <= data[i]);
+			while(++i, assert(i<N), data[i-1] <= data[i]);
 		}
 		// update the indices in the sorted array
 		// LMS t_index -> string t_index
