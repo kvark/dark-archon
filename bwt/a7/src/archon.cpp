@@ -42,39 +42,35 @@ class	Constructor	{
 
 	void ray(suffix *A, t_index num, unsigned depth)	{
 		while(num>1)	{
-			suffix *x,*z;
-			{
-				z = (x=A)+num;
-				suffix s = A[num>>1];
-				if(s<depth)	{
-					assert(s+1==depth);
-					if(num==2)
-						return;
-					const suffix t = A[num>>1] = A[0];
-					*--z=s; s=t; --num;
-				}
-				assert(s>=depth);
-				const T w = data[s-depth];
-				suffix *y = x;
-				for(;;)	{
-					s = *y;
-					if(s>=depth)	{
-						const T q = data[s-depth];
-						if(q <= w)	{
-							if(q != w)
-								*y=*x,*x++=s;
-							if(++y == z)
-								break;
-							continue;
-						}
-					}
-					if(--z == y)
-						break;
-					*y=*z,*z=s;
-				}
-				y=z; z=A+num;
-				num = y-x;
+			suffix *x=A, *z=A+num, s=A[num>>1];
+			if(s<depth)	{
+				assert(s+1==depth);
+				if(num==2)
+					return;
+				const suffix t = A[num>>1] = A[0];
+				*--z=s; s=t; --num;
 			}
+			assert(s>=depth);
+			const T w = data[s-depth];
+			suffix *y = x;
+			for(;;)	{
+				s = *y;
+				if(s>=depth)	{
+					const T q = data[s-depth];
+					if(q <= w)	{
+						if(q != w)
+							*y=*x,*x++=s;
+						if(++y == z)
+							break;
+						continue;
+					}
+				}
+				if(--z == y)
+					break;
+				*y=*z,*z=s;
+			}
+			y=z; z=A+num;
+			num = y-x;
 			ray(A,x-A,depth); A = x+num;
 			ray(A,z-A,depth); A = x;
 			++depth;
