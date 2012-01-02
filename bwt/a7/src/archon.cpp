@@ -153,6 +153,18 @@ class	Constructor	{
 	//---------------------------------
 	//	Intermediate routines	//
 
+	void findLMS()	{
+		buckets();
+		for(t_index i=n1=0; ; )	{
+			do if(++i>=N)
+				return;
+			while(data[i-1] >= data[i]);
+			++n1;	//found LMS!
+			P[--RE[data[i-1]]] = i;
+			while(++i<N && data[i-1] <= data[i]);
+		}
+	}
+
 	void packTargetIndices()	{
 		// pack LMS into the first n1 suffixes
 		t_index i=-1,j=0;
@@ -309,24 +321,20 @@ class	Constructor	{
 		assert(!n1 && N);
 		fillEmpty(0,N);
 		// scatter LMS into bucket positions
-		buckets();
-		for(t_index i=0; ; )	{
-			do if(++i>=N)
-				goto finished;
-			while(data[i-1] >= data[i]);
-			++n1;	//found LMS!
-			P[--RE[data[i-1]]] = i;
-			while(++i<N && data[i-1] <= data[i]);
-		}
-		finished:
+		findLMS();
 		// sort by induction (evil technology!)
 		inducePre();
-
-		// scatter into indices and values
+		// pack LMS indices
 		packTargetIndices();
+		// fill in the lengths
 		memset( P+n1, 0, (N-n1)*sizeof(suffix) );
 		parseLMS( XTargetLength(P+n1) );
+		// compute values
 		computeTargetValues();
+	}
+
+	void reduceFast(t_index *const D)	{
+		reduce();
 	}
 
 	template<typename Q>
@@ -460,7 +468,7 @@ class	Constructor	{
 public:
 	Constructor(const T *const _data, suffix *const _P, const t_index _N, const t_index _K, const t_index reserved)
 	: data(_data), P(_P), R(reinterpret_cast<t_index*>(_P+_N)), RE(R+1)
-	, R2(reserved>=_K*2 ? reinterpret_cast<t_index*>(_P+_N+reserved-_K+1) : NULL)
+	, R2(reserved>=_K*2 ? R+reserved-_K+1 : NULL)
 	, N(_N), K(_K), n1(0), d1(0), name(0)	{
 		assert( N>0 && K>0 && K<reserved );
 		checkData();
@@ -474,7 +482,11 @@ public:
 		return;
 #		endif
 		// reduce the problem to LMS sorting
-		reduce();
+		t_index *const D = R+K+1;
+		if(R2 && D+K+K<=R2)
+			reduceFast(D);
+		else
+			reduce();
 		// solve the reduced problem
 #		ifndef NO_SQUEEZE
 		if(name<=0x100)
