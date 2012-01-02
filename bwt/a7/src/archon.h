@@ -1,4 +1,4 @@
-typedef	signed int		suffix;
+typedef	unsigned int	suffix;
 typedef	unsigned int	t_index;
 typedef unsigned char	byte;
 typedef unsigned short	dbyte;
