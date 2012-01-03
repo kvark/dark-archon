@@ -154,8 +154,10 @@ class	Constructor	{
 	//	Intermediate routines	//
 
 	void findLMS()	{
+		assert(!n1 && N);
+		fillEmpty(0,N);
 		buckets();
-		for(t_index i=n1=0; ; )	{
+		for(t_index i=0; ; )	{
 			do if(++i>=N)
 				return;
 			while(data[i-1] >= data[i]);
@@ -199,8 +201,9 @@ class	Constructor	{
 	}
 
 	//---------------------------------
-	//	Strategy-1 implementation	//
+	//	Induction implementation	//
 
+	// the pre-pass to sort LMS
 	//todo: use buckets to traverse the SA efficiently
 	// if R2 is available
 
@@ -216,11 +219,11 @@ class	Constructor	{
 		for(i=0; i!=N; ++i)	{
 			const suffix s = P[i];
 			// empty space is supposed to be flagged
-			if(s&FLAG_LMS)	{
+			if(s>=N-1)	{
 				P[i] = s & MASK_SUF;
 				continue;
 			}
-			assert(s && s!=N);
+			assert(s);
 			P[i] = 0;
 			const T cur = data[s];
 			assert( data[s-1] <= cur );
@@ -230,7 +233,7 @@ class	Constructor	{
 			}
 			assert( pr>P+i && pr<P+RE[cur] );
 			const suffix q = s+1;
-			*pr++ = (q==N ? FLAG_LMS : q + (cur>data[q] ? FLAG_LMS:0) );
+			*pr++ = q + (cur>data[q] ? FLAG_LMS:0);
 		}
 		//right2left
 		buckets();
@@ -238,9 +241,8 @@ class	Constructor	{
 		*--pr = 1 + (prev<data[1] ? FLAG_LMS:0);
 		i=N; do	{
 			const suffix s = P[--i];
-			if((s&FLAG_LMS) || !s)
+			if(s>=N-1 || !s)
 				continue;
-			assert(s && s!=N);
 			//P[i] = 0;
 			const T cur = data[s];
 			assert( data[s-1] >= cur );
@@ -250,9 +252,71 @@ class	Constructor	{
 			}
 			assert( pr>P+R[cur] && pr<=P+i );
 			const suffix q = s+1;
-			*--pr = (q==N ? 0 : q + (cur<data[q] ? FLAG_LMS:0) );
+			*--pr = q + (cur<data[q] ? FLAG_LMS:0);
 		}while(i);
 	}
+
+	// the pre-pass to sort LMS
+	// using additional 2K space
+
+	void inducePreFast(t_index *const D)	{
+		// we are not interested in s==N here so
+		// we just skip it
+		t_index i;
+		T prev; suffix *pr=NULL;
+		assert(N);
+		//left2right
+		unsigned d=0;
+		buckets();
+		pr = P + R[prev=0];
+		for(i=0; i!=N; ++i)	{
+			suffix s = P[i];
+			// empty space is supposed to be flagged
+			if(s>=N-1)	{
+				P[i] = s & MASK_SUF;
+				continue;
+			}
+			assert(s);
+			P[i] = 0;
+			if( s>=N )	{
+				s-=N; ++d;
+			}
+			const T cur = data[s];
+			assert( data[s-1] <= cur );
+			if(cur != prev)	{
+				R[prev] = pr-P;
+				pr = P + R[prev=cur];
+			}
+			assert( pr>P+i && pr<P+RE[cur] );
+			unsigned t = (cur<<1) + (data[s+1]<cur);
+			suffix q = s+1;
+			if(D[t] != d)	{
+				q+=N; D[t]=d;
+			}
+			*pr++ = q + ((t&1) ? FLAG_LMS:0);
+		}
+		//right2left
+		buckets();
+		pr = P + RE[prev=data[0]];
+		*--pr = 1 + (prev<data[1] ? FLAG_LMS:0);
+		i=N; do	{
+			const suffix s = P[--i];
+			if(s>=N-1 || !s)
+				continue;
+			//P[i] = 0;
+			const T cur = data[s];
+			assert( data[s-1] >= cur );
+			if(cur != prev)	{
+				RE[prev] = pr-P;
+				pr = P + RE[prev=cur];
+			}
+			assert( pr>P+R[cur] && pr<=P+i );
+			const suffix q = s+1;
+			*--pr = q + (cur<data[q] ? FLAG_LMS:0);
+		}while(i);
+	}
+
+	// the post-pass to figure out all non-LMS suffixes
 
 	void inducePost()	{
 		t_index i;
@@ -318,8 +382,6 @@ class	Constructor	{
 	};
 
 	void reduce()	{
-		assert(!n1 && N);
-		fillEmpty(0,N);
 		// scatter LMS into bucket positions
 		findLMS();
 		// sort by induction (evil technology!)
@@ -334,7 +396,20 @@ class	Constructor	{
 	}
 
 	void reduceFast(t_index *const D)	{
-		reduce();
+		if(1)	{
+			findLMS();
+			// mark next-char borders
+			t_index i=K, top=N;
+			while(i--)	{
+				if(RE[i]==top)
+					continue;
+				assert( RE[i]<top && P[RE[i]] );
+				P[top=RE[i]] += N;
+			}
+			memset( D, 0, 2*K*sizeof(t_index) );
+			inducePreFast(D);
+		}else
+			reduce();
 	}
 
 	template<typename Q>
@@ -483,7 +558,7 @@ public:
 #		endif
 		// reduce the problem to LMS sorting
 		t_index *const D = R+K+1;
-		if(R2 && D+K+K<=R2)
+		if(0 && R2 && D+K+K<=R2 && !(N>>30))
 			reduceFast(D);
 		else
 			reduce();
@@ -509,12 +584,13 @@ public:
 t_index Archon::estimateReserve(const t_index n)	{
 	t_index total = 0x10000;
 #	ifndef NO_SQUEEZE
+	const int add = 0x400;	// R(0x101) + R2(0xFF) + D(0x200)
 	if(!(n>>17))
 		total = n/4+1;
-	if(total<0x200)
-		total = 0x200;
+	if(total<add)
+		total = add;
 #	endif
-	return total+1;
+	return total;
 }
 
 Archon::Archon(const t_index Nx)
@@ -584,7 +660,7 @@ int Archon::de_compute()	{
 	t_index i,k;
 	// compute buchet heads
 	t_index *const R = reinterpret_cast<t_index*>(P+N+1);
-	assert( N+0x102 <= Nmax+Nreserve );
+	assert( N+0x101 <= Nmax+Nreserve );
 	memset( R, 0, 0x100*sizeof(t_index) );
 	for(i=0; i!=N; ++i)
 		++R[str[i]];
