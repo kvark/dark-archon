@@ -28,8 +28,10 @@ class	Constructor	{
 	t_index	name;			// new number of unique values
 
 	enum	{
-		FLAG_LMS	= 1<<31,
-		MASK_SUF	= ~FLAG_LMS
+		BIT_LMS		= 31,
+		FLAG_LMS	= 1<<BIT_LMS,
+		BIT_JUMP	= 30,
+		FLAG_JUMP	= 1<<BIT_JUMP
 	};
 
 	//---------------------------------
@@ -220,7 +222,7 @@ class	Constructor	{
 			const suffix s = P[i];
 			// empty space is supposed to be flagged
 			if(s>=N-1)	{
-				P[i] = s & MASK_SUF;
+				P[i] = s & ~FLAG_LMS;
 				continue;
 			}
 			assert(s);
@@ -233,12 +235,12 @@ class	Constructor	{
 			}
 			assert( pr>P+i && pr<P+RE[cur] );
 			const suffix q = s+1;
-			*pr++ = q + (cur>data[q] ? FLAG_LMS:0);
+			*pr++ = q | (cur>data[q] ? FLAG_LMS:0);
 		}
 		//right2left
 		buckets();
 		pr = P + RE[prev=data[0]];
-		*--pr = 1 + (prev<data[1] ? FLAG_LMS:0);
+		*--pr = 1 | (prev<data[1] ? FLAG_LMS:0);
 		i=N; do	{
 			const suffix s = P[--i];
 			if(s>=N-1 || !s)
@@ -252,7 +254,7 @@ class	Constructor	{
 			}
 			assert( pr>P+R[cur] && pr<=P+i );
 			const suffix q = s+1;
-			*--pr = q + (cur<data[q] ? FLAG_LMS:0);
+			*--pr = q | (cur<data[q] ? FLAG_LMS:0);
 		}while(i);
 	}
 
@@ -271,14 +273,15 @@ class	Constructor	{
 		for(i=0; i!=N; ++i)	{
 			suffix s = P[i];
 			// empty space is supposed to be flagged
-			if((s&FLAG_LMS) || s==N-1 || s==N+N-1)	{
-				P[i] = s & MASK_SUF;
+			if((s&FLAG_LMS) || s==N-1 || s==((N-1)|FLAG_JUMP))	{
+				P[i] = s & ~FLAG_LMS;
 				continue;
 			}
 			assert(s);
 			P[i] = 0;
-			if( s>=N )	{
-				s-=N; ++d;
+			if( s & FLAG_JUMP )	{
+				s ^= FLAG_JUMP;
+				++d;
 			}
 			const T cur = data[s];
 			assert( data[s-1] <= cur );
@@ -290,30 +293,32 @@ class	Constructor	{
 			unsigned t = (cur<<1) + (data[s+1]<cur);
 			suffix q = s+1;
 			if(D[t] != d)	{
-				q+=N; D[t]=d;
+				q |= FLAG_JUMP;
+				D[t] = d;
 			}//todo: can be optimized
-			*pr++ = q + ((t&1) ? FLAG_LMS:0);
+			*pr++ = q | ((t&1) ? FLAG_LMS:0);
 		}
 		//reverse flags order
 		i=N; do	{
 			const suffix s = P[--i];
 			if(s && s<N)	{
-				P[i] += N;
-				while( assert(i>0), P[--i]<N );
-				P[i] -= N;
+				P[i] |= FLAG_JUMP;
+				while( assert(i>0), !(P[--i]&FLAG_JUMP) );
+				P[i] ^= FLAG_JUMP;
 			}
 		}while(i);
 		//right2left
 		buckets();
 		pr = P + RE[prev=data[0]];
-		*--pr = 1 + N + (prev<data[1] ? FLAG_LMS:0);
+		*--pr = 1 | FLAG_JUMP | (prev<data[1] ? FLAG_LMS:0);
 		i=N; ++d; do	{
 			suffix s = P[--i];
 			if((s&FLAG_LMS) || s==N-1 || s==N+N-1 || !s)
 				continue;
 			//P[i] = 0;
-			if( s>=N )	{
-				s-=N; ++d;
+			if( s & FLAG_JUMP )	{
+				s ^= FLAG_JUMP;
+				++d;
 			}
 			const T cur = data[s];
 			assert( data[s-1] >= cur );
@@ -325,9 +330,10 @@ class	Constructor	{
 			unsigned t = (cur<<1) + (data[s+1]>cur);
 			suffix q = s+1;
 			if(D[t] != d)	{
-				q+=N; D[t]=d;
+				q |= FLAG_JUMP;
+				D[t] = d;
 			}//todo: can be optimized
-			*--pr = q + ((t&1) ? FLAG_LMS:0);
+			*--pr = q | ((t&1) ? FLAG_LMS:0);
 		}while(i);
 	}
 
@@ -354,16 +360,16 @@ class	Constructor	{
 			}
 			assert( pr>P+i && pr<P+RE[cur] );
 			const suffix q = s+1;
-			*pr++ = q + (q==N || cur>data[q] ? FLAG_LMS:0);
+			*pr++ = q | (q==N || cur>data[q] ? FLAG_LMS:0);
 		}
 		//right2left
 		buckets();
 		pr = P + RE[prev=data[0]];
-		*--pr = 1 + (prev<data[1] ? FLAG_LMS:0);
+		*--pr = 1 | (prev<data[1] ? FLAG_LMS:0);
 		i=N; do	{
 			const suffix s = P[--i];
 			if((s&FLAG_LMS) || s==N)	{
-				P[i] = s & MASK_SUF;
+				P[i] = s & ~FLAG_LMS;
 				continue;
 			}
 			assert(s);
@@ -375,7 +381,7 @@ class	Constructor	{
 			}
 			assert( pr>P+R[cur] && pr<=P+i );
 			const suffix q = s+1;
-			*--pr = q + (q!=N && cur<data[q] ? FLAG_LMS:0);
+			*--pr = q | (q!=N && cur<data[q] ? FLAG_LMS:0);
 		}while(i);
 	}
 
@@ -418,7 +424,7 @@ class	Constructor	{
 			if(RE[i]==top)
 				continue;
 			assert( RE[i]<top && P[RE[i]] );
-			P[RE[i]] += N;
+			P[RE[i]] |= FLAG_JUMP;
 		}
 		inducePreFast(D);
 		name = 0;
@@ -428,9 +434,9 @@ class	Constructor	{
 			suffix s = P[i];
 			if(!(s&FLAG_LMS))
 				continue;
-			s &= MASK_SUF;
-			if(s>=N)	{
-				if(s==N+N)
+			s ^= FLAG_LMS;
+			if(s & FLAG_JUMP)	{
+				if(s==(N|FLAG_JUMP))
 					continue;
 				++name;
 			}
@@ -445,8 +451,9 @@ class	Constructor	{
 			top = name+1;
 			i=n1; do	{
 				suffix suf = P[--i];
-				if(suf>=N)	{
-					suf-=N; --top;
+				if(suf & FLAG_JUMP)	{
+					suf ^= FLAG_JUMP;
+					--top;
 				}
 				s1[suf>>1] = top;
 			}while(i);
@@ -454,8 +461,9 @@ class	Constructor	{
 		}else	{
 			d1 = n1;
 			for(i=0; i!=n1; ++i)	{
-				if(P[i]>N)
-					P[i] -= N;
+				//todo:
+				if(P[i] & FLAG_JUMP)
+					P[i] ^= FLAG_JUMP;
 			}
 			return false;
 		}
