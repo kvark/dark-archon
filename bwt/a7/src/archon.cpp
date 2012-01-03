@@ -207,8 +207,6 @@ class	Constructor	{
 	//	Induction implementation	//
 
 	// the pre-pass to sort LMS
-	//todo: use buckets to traverse the SA efficiently
-	// if R2 is available
 
 	void inducePre()	{
 		// we are not interested in s>=N-1 here so we skip it
@@ -273,7 +271,7 @@ class	Constructor	{
 		for(i=0; i!=N; ++i)	{
 			suffix s = P[i];
 			// empty space is supposed to be flagged
-			if((s&FLAG_LMS) || s==N-1 || s==((N-1)|FLAG_JUMP))	{
+			if((s&FLAG_LMS) || (s&~FLAG_JUMP)==N-1)	{
 				P[i] = s & ~FLAG_LMS;
 				continue;
 			}
@@ -295,8 +293,8 @@ class	Constructor	{
 			if(D[t] != d)	{
 				q |= FLAG_JUMP;
 				D[t] = d;
-			}//todo: can be optimized
-			*pr++ = q | ((t&1) ? FLAG_LMS:0);
+			}
+			*pr++ = q | ((t&1)<<BIT_LMS);
 		}
 		//reverse flags order
 		i=N; do	{
@@ -313,7 +311,7 @@ class	Constructor	{
 		*--pr = 1 | FLAG_JUMP | (prev<data[1] ? FLAG_LMS:0);
 		i=N; ++d; do	{
 			suffix s = P[--i];
-			if((s&FLAG_LMS) || s==N-1 || s==N+N-1 || !s)
+			if((s&FLAG_LMS) || !s || (s&~FLAG_JUMP)==N-1)
 				continue;
 			//P[i] = 0;
 			if( s & FLAG_JUMP )	{
@@ -332,8 +330,8 @@ class	Constructor	{
 			if(D[t] != d)	{
 				q |= FLAG_JUMP;
 				D[t] = d;
-			}//todo: can be optimized
-			*--pr = q | ((t&1) ? FLAG_LMS:0);
+			}
+			*--pr = q | ((t&1)<<BIT_LMS);
 		}while(i);
 	}
 
@@ -351,7 +349,7 @@ class	Constructor	{
 			P[i] = s ^ FLAG_LMS;
 			if(s & FLAG_LMS)
 				continue;
-			assert(s && s!=N);
+			assert(s && s<N);
 			const T cur = data[s];
 			assert( data[s-1] <= cur );
 			if(cur != prev)	{
@@ -368,7 +366,7 @@ class	Constructor	{
 		*--pr = 1 | (prev<data[1] ? FLAG_LMS:0);
 		i=N; do	{
 			const suffix s = P[--i];
-			if((s&FLAG_LMS) || s==N)	{
+			if(s>=N)	{
 				P[i] = s & ~FLAG_LMS;
 				continue;
 			}
@@ -460,11 +458,8 @@ class	Constructor	{
 			return true;
 		}else	{
 			d1 = n1;
-			for(i=0; i!=n1; ++i)	{
-				//todo:
-				if(P[i] & FLAG_JUMP)
-					P[i] ^= FLAG_JUMP;
-			}
+			for(i=0; i!=n1; ++i)
+				P[i] &= ~FLAG_JUMP;
 			return false;
 		}
 	}
@@ -609,14 +604,14 @@ public:
 			makeBuckets();
 			memcpy( R2, RE, (K-1)*sizeof(t_index) );
 		}
-		if(!sInduction)	{
+		if(!sInduction || (N>>BIT_LMS))	{
 			directSort();
 			return;
 		}
 		// reduce the problem to LMS sorting
 		t_index *const D = R+K+1;
 		bool need = true;
-		if(sTracking && R2 && D+K+K<=R2 && !(N>>30))
+		if(sTracking && R2 && D+K+K<=R2 && !(N>>BIT_JUMP))
 			need = reduceFast(D);
 		else
 			reduce();
