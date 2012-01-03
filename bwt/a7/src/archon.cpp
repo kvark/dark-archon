@@ -11,7 +11,8 @@
 // It also uses some nice optimizations found in Yuta Mori version:
 // https://sites.google.com/site/yuta256/sais
 //--------------------------------------------------------------------------//
-
+static const bool	sInduction	= true;
+static const bool	sTracking	= true;
 
 template<typename T>
 class	Constructor	{
@@ -208,8 +209,7 @@ class	Constructor	{
 	// if R2 is available
 
 	void inducePre()	{
-		// we are not interested in s==N here so
-		// we just skip it
+		// we are not interested in s>=N-1 here so we skip it
 		t_index i;
 		T prev; suffix *pr=NULL;
 		assert(N);
@@ -260,11 +260,10 @@ class	Constructor	{
 	// using additional 2K space
 
 	void inducePreFast(t_index *const D)	{
-		// we are not interested in s==N here so
-		// we just skip it
 		t_index i;
 		T prev; suffix *pr=NULL;
 		assert(N);
+		memset( D, 0, 2*K*sizeof(t_index) );
 		//left2right
 		unsigned d=0;
 		buckets();
@@ -272,7 +271,7 @@ class	Constructor	{
 		for(i=0; i!=N; ++i)	{
 			suffix s = P[i];
 			// empty space is supposed to be flagged
-			if(s>=N-1)	{
+			if((s&FLAG_LMS) || s==N-1 || s==N+N-1)	{
 				P[i] = s & MASK_SUF;
 				continue;
 			}
@@ -292,18 +291,30 @@ class	Constructor	{
 			suffix q = s+1;
 			if(D[t] != d)	{
 				q+=N; D[t]=d;
-			}
+			}//todo: can be optimized
 			*pr++ = q + ((t&1) ? FLAG_LMS:0);
 		}
+		//reverse flags order
+		i=N; do	{
+			const suffix s = P[--i];
+			if(s && s<N)	{
+				P[i] += N;
+				while( assert(i>0), P[--i]<N );
+				P[i] -= N;
+			}
+		}while(i);
 		//right2left
 		buckets();
 		pr = P + RE[prev=data[0]];
-		*--pr = 1 + (prev<data[1] ? FLAG_LMS:0);
-		i=N; do	{
-			const suffix s = P[--i];
-			if(s>=N-1 || !s)
+		*--pr = 1 + N + (prev<data[1] ? FLAG_LMS:0);
+		i=N; ++d; do	{
+			suffix s = P[--i];
+			if((s&FLAG_LMS) || s==N-1 || s==N+N-1 || !s)
 				continue;
 			//P[i] = 0;
+			if( s>=N )	{
+				s-=N; ++d;
+			}
 			const T cur = data[s];
 			assert( data[s-1] >= cur );
 			if(cur != prev)	{
@@ -311,8 +322,12 @@ class	Constructor	{
 				pr = P + RE[prev=cur];
 			}
 			assert( pr>P+R[cur] && pr<=P+i );
-			const suffix q = s+1;
-			*--pr = q + (cur<data[q] ? FLAG_LMS:0);
+			unsigned t = (cur<<1) + (data[s+1]>cur);
+			suffix q = s+1;
+			if(D[t] != d)	{
+				q+=N; D[t]=d;
+			}//todo: can be optimized
+			*--pr = q + ((t&1) ? FLAG_LMS:0);
 		}while(i);
 	}
 
@@ -395,21 +410,55 @@ class	Constructor	{
 		computeTargetValues();
 	}
 
-	void reduceFast(t_index *const D)	{
-		if(1)	{
-			findLMS();
-			// mark next-char borders
-			t_index i=K, top=N;
-			while(i--)	{
-				if(RE[i]==top)
+	bool reduceFast(t_index *const D)	{
+		findLMS();
+		// mark next-char borders
+		t_index i=K, top=N;
+		for(R2[-1] = 0; i--; top=R2[i-1])	{
+			if(RE[i]==top)
+				continue;
+			assert( RE[i]<top && P[RE[i]] );
+			P[RE[i]] += N;
+		}
+		inducePreFast(D);
+		name = 0;
+		// pack target indices
+		for(top=i=0; ;++i)	{
+			assert(i<N);
+			suffix s = P[i];
+			if(!(s&FLAG_LMS))
+				continue;
+			s &= MASK_SUF;
+			if(s>=N)	{
+				if(s==N+N)
 					continue;
-				assert( RE[i]<top && P[RE[i]] );
-				P[top=RE[i]] += N;
+				++name;
 			}
-			memset( D, 0, 2*K*sizeof(t_index) );
-			inducePreFast(D);
-		}else
-			reduce();
+			P[top] = s;
+			if(++top==n1)
+				break;
+		}
+		// store names or unset flags
+		if(name < n1)	{
+			suffix *const s1 = P+n1;
+			memset( s1, 0, (N-n1)*sizeof(suffix) );
+			top = name+1;
+			i=n1; do	{
+				suffix suf = P[--i];
+				if(suf>=N)	{
+					suf-=N; --top;
+				}
+				s1[suf>>1] = top;
+			}while(i);
+			return true;
+		}else	{
+			d1 = n1;
+			for(i=0; i!=n1; ++i)	{
+				if(P[i]>N)
+					P[i] -= N;
+			}
+			return false;
+		}
 	}
 
 	template<typename Q>
@@ -481,15 +530,15 @@ class	Constructor	{
 	};
 
 
-	void derive()	{
-		memmove( P, P+d1, n1*sizeof(suffix) );
-		// get the list of LMS strings into [n1,2*n1]
-		// LMS number -> actual string number
-		if(R2)
-			parseLMS( XListGood(P+n1,R,K,data) );
-		else
-			parseLMS( XListBad(P+n1) );
-		{
+	void derive(bool sorted)	{
+		if(sorted)	{
+			memmove( P, P+d1, n1*sizeof(suffix) );
+			// get the list of LMS strings into [n1,2*n1]
+			// LMS number -> actual string number
+			if(R2)
+				parseLMS( XListGood(P+n1,R,K,data) );
+			else
+				parseLMS( XListBad(P+n1) );
 			// update the indices in the sorted array
 			// LMS t_index -> string t_index
 			//todo: try to combine with the next pass
@@ -500,7 +549,7 @@ class	Constructor	{
 			}
 		}
 		// scatter LMS back into proper positions
-		if(R2)	{
+		if(R2 && sorted)	{
 			R2[-1] = 0;	// either unoccupied or R[K], which we don't use
 			t_index top = N, i=K;
 			suffix *x = P+n1;
@@ -521,7 +570,7 @@ class	Constructor	{
 			suffix *pr = P + RE[prev_sym];
 			for(t_index i=n1; i--; )	{
 				const suffix suf = P[i];
-				P[i] = 0;
+				P[i] = FLAG_LMS;
 				assert(suf>0 && suf<=(suffix)N	&& "Invalid suffix!");
 				const T cur = data[suf-1];
 				if(cur != prev_sym)	{
@@ -552,27 +601,30 @@ public:
 			makeBuckets();
 			memcpy( R2, RE, (K-1)*sizeof(t_index) );
 		}
-#		ifdef	NO_INDUCTION
-		directSort();
-		return;
-#		endif
+		if(!sInduction)	{
+			directSort();
+			return;
+		}
 		// reduce the problem to LMS sorting
 		t_index *const D = R+K+1;
-		if(0 && R2 && D+K+K<=R2 && !(N>>30))
-			reduceFast(D);
+		bool need = true;
+		if(sTracking && R2 && D+K+K<=R2 && !(N>>30))
+			need = reduceFast(D);
 		else
 			reduce();
 		// solve the reduced problem
+		if(need)	{
 #		ifndef NO_SQUEEZE
-		if(name<=0x100)
-			solve<byte>(reserved);
-		else if(name<=0x10000)
-			solve<dbyte>(reserved);
-		else
+			if(name<=0x100)
+				solve<byte>(reserved);
+			else if(name<=0x10000)
+				solve<dbyte>(reserved);
+			else
 #		endif
-			solve<unsigned>(reserved);
+				solve<unsigned>(reserved);
+		}
 		// derive all other suffixes
-		derive();
+		derive(need);
 	}
 };
 
