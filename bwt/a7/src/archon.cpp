@@ -29,7 +29,9 @@ class	Constructor	{
 
 	enum	{
 		BIT_LMS		= 31,
-		FLAG_LMS	= 1<<BIT_LMS
+		FLAG_LMS	= 1<<BIT_LMS,
+		BIT_JUMP	= 30,
+		FLAG_JUMP	= 1<<BIT_JUMP,
 	};
 
 	//---------------------------------
@@ -602,7 +604,7 @@ public:
 			makeBuckets();
 			memcpy( R2, RE, (K-1)*sizeof(t_index) );
 		}
-		if(!sInduction)	{
+		if(!sInduction || (N>>BIT_JUMP))	{
 			directSort();
 			return;
 		}
