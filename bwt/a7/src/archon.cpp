@@ -233,12 +233,12 @@ class	Constructor	{
 			}
 			assert( pr>P+i && pr<P+RE[cur] );
 			const suffix q = s+1;
-			*pr++ = q + (cur>data[q] ? FLAG_LMS:0);
+			*pr++ = q | (cur>data[q] ? FLAG_LMS:0);
 		}
 		//right2left
 		buckets();
 		pr = P + RE[prev=data[0]];
-		*--pr = 1 + (prev<data[1] ? FLAG_LMS:0);
+		*--pr = 1 | (prev<data[1] ? FLAG_LMS:0);
 		i=N; do	{
 			const suffix s = P[--i];
 			if(s>=N-1 || !s)
@@ -252,7 +252,7 @@ class	Constructor	{
 			}
 			assert( pr>P+R[cur] && pr<=P+i );
 			const suffix q = s+1;
-			*--pr = q + (cur<data[q] ? FLAG_LMS:0);
+			*--pr = q | (cur<data[q] ? FLAG_LMS:0);
 		}while(i);
 	}
 
@@ -293,7 +293,7 @@ class	Constructor	{
 			if(D[t] != d)	{
 				q+=N; D[t]=d;
 			}//todo: can be optimized
-			*pr++ = q + (t<<BIT_LMS);
+			*pr++ = q | (t<<BIT_LMS);
 		}
 		//reverse flags order
 		i=N; do	{
@@ -307,7 +307,7 @@ class	Constructor	{
 		//right2left
 		buckets();
 		pr = P + RE[prev=data[0]];
-		*--pr = 1 + N + (prev<data[1] ? FLAG_LMS:0);
+		*--pr = (1 + N) | (prev<data[1] ? FLAG_LMS:0);
 		i=N; ++d; do	{
 			suffix s = P[--i];
 			if((s&FLAG_LMS) || s==N-1 || s==N+N-1 || !s)
@@ -328,7 +328,7 @@ class	Constructor	{
 			if(D[t] != d)	{
 				q+=N; D[t]=d;
 			}//todo: can be optimized
-			*--pr = q + (t<<BIT_LMS);
+			*--pr = q | (t<<BIT_LMS);
 		}while(i);
 	}
 
@@ -355,12 +355,12 @@ class	Constructor	{
 			}
 			assert( pr>P+i && pr<P+RE[cur] );
 			const suffix q = s+1;
-			*pr++ = q + (q==N || cur>data[q] ? FLAG_LMS:0);
+			*pr++ = q | (q==N || cur>data[q] ? FLAG_LMS:0);
 		}
 		//right2left
 		buckets();
 		pr = P + RE[prev=data[0]];
-		*--pr = 1 + (prev<data[1] ? FLAG_LMS:0);
+		*--pr = 1 | (prev<data[1] ? FLAG_LMS:0);
 		i=N; do	{
 			const suffix s = P[--i];
 			if((s&FLAG_LMS) || s==N)	{
@@ -376,7 +376,7 @@ class	Constructor	{
 			}
 			assert( pr>P+R[cur] && pr<=P+i );
 			const suffix q = s+1;
-			*--pr = q + (q!=N && cur<data[q] ? FLAG_LMS:0);
+			*--pr = q | (q!=N && cur<data[q] ? FLAG_LMS:0);
 		}while(i);
 	}
 
