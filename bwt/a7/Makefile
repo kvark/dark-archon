@@ -9,7 +9,10 @@ release:
 debug:
 	${CXX} -o bin/main_d ${FILES} -g3
 
-profile:
-	${CXX} -o bin/main_p ${FILES} -O2 -g -DNDEBUG
+valgrind:
+	${CXX} -o bin/main_p ${FILES} -O2 -fno-inline -DNDEBUG -g
 
-all:	release debug profile
+gprof:
+	${CXX} -o bin/main_g ${FILES} -O2 -fno-inline -DNDEBUG -pg
+
+all:	release debug valgrind gprof
