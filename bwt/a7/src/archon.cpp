@@ -29,9 +29,7 @@ class	Constructor	{
 
 	enum	{
 		BIT_LMS		= 31,
-		FLAG_LMS	= 1<<BIT_LMS,
-		BIT_JUMP	= 30,
-		FLAG_JUMP	= 1<<BIT_JUMP
+		FLAG_LMS	= 1<<BIT_LMS
 	};
 
 	//---------------------------------
@@ -207,6 +205,8 @@ class	Constructor	{
 	//	Induction implementation	//
 
 	// the pre-pass to sort LMS
+	//todo: use buckets to traverse the SA efficiently
+	// if R2 is available
 
 	void inducePre()	{
 		// we are not interested in s>=N-1 here so we skip it
@@ -233,12 +233,12 @@ class	Constructor	{
 			}
 			assert( pr>P+i && pr<P+RE[cur] );
 			const suffix q = s+1;
-			*pr++ = q | (cur>data[q] ? FLAG_LMS:0);
+			*pr++ = q + (cur>data[q] ? FLAG_LMS:0);
 		}
 		//right2left
 		buckets();
 		pr = P + RE[prev=data[0]];
-		*--pr = 1 | (prev<data[1] ? FLAG_LMS:0);
+		*--pr = 1 + (prev<data[1] ? FLAG_LMS:0);
 		i=N; do	{
 			const suffix s = P[--i];
 			if(s>=N-1 || !s)
@@ -252,7 +252,7 @@ class	Constructor	{
 			}
 			assert( pr>P+R[cur] && pr<=P+i );
 			const suffix q = s+1;
-			*--pr = q | (cur<data[q] ? FLAG_LMS:0);
+			*--pr = q + (cur<data[q] ? FLAG_LMS:0);
 		}while(i);
 	}
 
@@ -260,6 +260,7 @@ class	Constructor	{
 	// using additional 2K space
 
 	void inducePreFast(t_index *const D)	{
+		assert( BIT_LMS+1 == sizeof(suffix)*4 );
 		t_index i;
 		T prev; suffix *pr=NULL;
 		assert(N);
@@ -271,15 +272,14 @@ class	Constructor	{
 		for(i=0; i!=N; ++i)	{
 			suffix s = P[i];
 			// empty space is supposed to be flagged
-			if((s&FLAG_LMS) || (s&~FLAG_JUMP)==N-1)	{
+			if((s&FLAG_LMS) || s==N-1 || s==N+N-1)	{
 				P[i] = s & ~FLAG_LMS;
 				continue;
 			}
 			assert(s);
 			P[i] = 0;
-			if( s & FLAG_JUMP )	{
-				s ^= FLAG_JUMP;
-				++d;
+			if( s>=N )	{
+				s-=N; ++d;
 			}
 			const T cur = data[s];
 			assert( data[s-1] <= cur );
@@ -291,32 +291,30 @@ class	Constructor	{
 			unsigned t = (cur<<1) + (data[s+1]<cur);
 			suffix q = s+1;
 			if(D[t] != d)	{
-				q |= FLAG_JUMP;
-				D[t] = d;
-			}
-			*pr++ = q | ((t&1)<<BIT_LMS);
+				q+=N; D[t]=d;
+			}//todo: can be optimized
+			*pr++ = q + (t<<BIT_LMS);
 		}
 		//reverse flags order
 		i=N; do	{
 			const suffix s = P[--i];
 			if(s && s<N)	{
-				P[i] |= FLAG_JUMP;
-				while( assert(i>0), !(P[--i]&FLAG_JUMP) );
-				P[i] ^= FLAG_JUMP;
+				P[i] += N;
+				while( assert(i>0), P[--i]<N );
+				P[i] -= N;
 			}
 		}while(i);
 		//right2left
 		buckets();
 		pr = P + RE[prev=data[0]];
-		*--pr = 1 | FLAG_JUMP | (prev<data[1] ? FLAG_LMS:0);
+		*--pr = 1 + N + (prev<data[1] ? FLAG_LMS:0);
 		i=N; ++d; do	{
 			suffix s = P[--i];
-			if((s&FLAG_LMS) || !s || (s&~FLAG_JUMP)==N-1)
+			if((s&FLAG_LMS) || s==N-1 || s==N+N-1 || !s)
 				continue;
 			//P[i] = 0;
-			if( s & FLAG_JUMP )	{
-				s ^= FLAG_JUMP;
-				++d;
+			if( s>=N )	{
+				s-=N; ++d;
 			}
 			const T cur = data[s];
 			assert( data[s-1] >= cur );
@@ -328,10 +326,9 @@ class	Constructor	{
 			unsigned t = (cur<<1) + (data[s+1]>cur);
 			suffix q = s+1;
 			if(D[t] != d)	{
-				q |= FLAG_JUMP;
-				D[t] = d;
-			}
-			*--pr = q | ((t&1)<<BIT_LMS);
+				q+=N; D[t]=d;
+			}//todo: can be optimized
+			*--pr = q + (t<<BIT_LMS);
 		}while(i);
 	}
 
@@ -349,7 +346,7 @@ class	Constructor	{
 			P[i] = s ^ FLAG_LMS;
 			if(s & FLAG_LMS)
 				continue;
-			assert(s && s<N);
+			assert(s && s!=N);
 			const T cur = data[s];
 			assert( data[s-1] <= cur );
 			if(cur != prev)	{
@@ -358,15 +355,15 @@ class	Constructor	{
 			}
 			assert( pr>P+i && pr<P+RE[cur] );
 			const suffix q = s+1;
-			*pr++ = q | (q==N || cur>data[q] ? FLAG_LMS:0);
+			*pr++ = q + (q==N || cur>data[q] ? FLAG_LMS:0);
 		}
 		//right2left
 		buckets();
 		pr = P + RE[prev=data[0]];
-		*--pr = 1 | (prev<data[1] ? FLAG_LMS:0);
+		*--pr = 1 + (prev<data[1] ? FLAG_LMS:0);
 		i=N; do	{
 			const suffix s = P[--i];
-			if(s>=N)	{
+			if((s&FLAG_LMS) || s==N)	{
 				P[i] = s & ~FLAG_LMS;
 				continue;
 			}
@@ -379,7 +376,7 @@ class	Constructor	{
 			}
 			assert( pr>P+R[cur] && pr<=P+i );
 			const suffix q = s+1;
-			*--pr = q | (q!=N && cur<data[q] ? FLAG_LMS:0);
+			*--pr = q + (q!=N && cur<data[q] ? FLAG_LMS:0);
 		}while(i);
 	}
 
@@ -422,7 +419,7 @@ class	Constructor	{
 			if(RE[i]==top)
 				continue;
 			assert( RE[i]<top && P[RE[i]] );
-			P[RE[i]] |= FLAG_JUMP;
+			P[RE[i]] += N;
 		}
 		inducePreFast(D);
 		name = 0;
@@ -432,9 +429,9 @@ class	Constructor	{
 			suffix s = P[i];
 			if(!(s&FLAG_LMS))
 				continue;
-			s ^= FLAG_LMS;
-			if(s & FLAG_JUMP)	{
-				if(s==(N|FLAG_JUMP))
+			s &= ~FLAG_LMS;
+			if(s>=N)	{
+				if(s==N+N)
 					continue;
 				++name;
 			}
@@ -449,17 +446,18 @@ class	Constructor	{
 			top = name+1;
 			i=n1; do	{
 				suffix suf = P[--i];
-				if(suf & FLAG_JUMP)	{
-					suf ^= FLAG_JUMP;
-					--top;
+				if(suf>=N)	{
+					suf-=N; --top;
 				}
 				s1[suf>>1] = top;
 			}while(i);
 			return true;
 		}else	{
 			d1 = n1;
-			for(i=0; i!=n1; ++i)
-				P[i] &= ~FLAG_JUMP;
+			for(i=0; i!=n1; ++i)	{
+				if(P[i]>N)
+					P[i] -= N;
+			}
 			return false;
 		}
 	}
@@ -604,14 +602,14 @@ public:
 			makeBuckets();
 			memcpy( R2, RE, (K-1)*sizeof(t_index) );
 		}
-		if(!sInduction || (N>>BIT_LMS))	{
+		if(!sInduction)	{
 			directSort();
 			return;
 		}
 		// reduce the problem to LMS sorting
 		t_index *const D = R+K+1;
 		bool need = true;
-		if(sTracking && R2 && D+K+K<=R2 && !(N>>BIT_JUMP))
+		if(sTracking && R2 && D+K+K<=R2 && !(N>>30))
 			need = reduceFast(D);
 		else
 			reduce();
