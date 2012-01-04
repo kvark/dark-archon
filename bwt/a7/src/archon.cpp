@@ -207,6 +207,12 @@ class	Constructor	{
 	//---------------------------------
 	//	Induction implementation	//
 
+	struct Inductor	{
+		bool ckeckUp(suffix &s)	{
+			return true;
+		}
+	};
+
 	// the pre-pass to sort LMS
 	//todo: use buckets to traverse the SA efficiently
 	// if R2 is available
@@ -222,11 +228,11 @@ class	Constructor	{
 		for(i=0; i!=N; ++i)	{
 			const suffix s = P[i];
 			// empty space is supposed to be flagged
-			if((s&FLAG_LMS) >= N-1)	{
+			if(s >= N-1)	{
 				P[i] = s & ~FLAG_LMS;
 				continue;
 			}
-			assert(s);
+			assert(s>0 && s<N-1);
 			P[i] = 0;
 			const T cur = data[s];
 			assert( data[s-1] <= cur );
@@ -246,6 +252,7 @@ class	Constructor	{
 			const suffix s = P[--i];
 			if((unsigned)(s-1) >= N-2)
 				continue;
+			assert(s>0 && s<N-1);
 			//P[i] = 0;
 			const T cur = data[s];
 			assert( data[s-1] >= cur );
@@ -279,7 +286,7 @@ class	Constructor	{
 				P[i] = s & ~FLAG_LMS;
 				continue;
 			}
-			assert(s);
+			assert(s>0 && (s&~FLAG_JUMP)<N-1);
 			P[i] = 0;
 			d += s>>BIT_JUMP;
 			s &= ~FLAG_JUMP;
@@ -303,6 +310,7 @@ class	Constructor	{
 			const suffix s = P[--i];
 			// exclude 0 and N+
 			if((unsigned)(s-1) < N-1U)	{
+				assert(s>0 && s<N);
 				P[i] |= FLAG_JUMP;
 				while( assert(i>0), !(P[--i]&FLAG_JUMP) );
 				P[i] ^= FLAG_JUMP;
@@ -317,6 +325,7 @@ class	Constructor	{
 			// exclude N-1 and 0 and LMS flags
 			if((unsigned)((s&~FLAG_JUMP)-1) >= N-2U)
 				continue;
+			assert(s>0 && (s&~FLAG_JUMP)<N-1);
 			//P[i] = 0;
 			d += s>>BIT_JUMP;
 			s &= ~FLAG_JUMP;
@@ -368,7 +377,7 @@ class	Constructor	{
 		*--pr = 1 | (prev<data[1] ? FLAG_LMS:0);
 		i=N; do	{
 			const suffix s = P[--i];
-			if(s>=N)	{
+			if(s >= N)	{
 				P[i] = s & ~FLAG_LMS;
 				continue;
 			}
@@ -421,7 +430,7 @@ class	Constructor	{
 		// mark next-char borders
 		assert(R2);
 		t_index i=K-1, top=N;
-		for(R2[-1]=0;;)	{
+		for(;;)	{
 			if(RE[i]!=top)	{
 				assert( RE[i]<top && P[RE[i]] );
 				P[RE[i]] |= FLAG_JUMP;
@@ -438,7 +447,7 @@ class	Constructor	{
 			suffix s = P[i];
 			if(!(s&FLAG_LMS))
 				continue;
-			s &= ~FLAG_LMS;
+			s ^= FLAG_LMS;
 			if(s & FLAG_JUMP)	{
 				if(s==(N|FLAG_JUMP))
 					continue;
@@ -455,18 +464,15 @@ class	Constructor	{
 			top = name+1;
 			i=n1; do	{
 				suffix suf = P[--i];
-				if(suf & FLAG_JUMP)	{
-					suf ^= FLAG_JUMP;
-					--top;
-				}
+				top -= suf>>BIT_JUMP;
+				suf &= ~FLAG_JUMP;
 				s1[suf>>1] = top;
 			}while(i);
 			return true;
 		}else	{
 			d1 = n1;
-			for(i=0; i!=n1; ++i)	{
+			for(i=0; i!=n1; ++i)
 				P[i] &= ~FLAG_JUMP;
-			}
 			return false;
 		}
 	}
