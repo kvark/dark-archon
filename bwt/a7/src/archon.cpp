@@ -4,9 +4,8 @@
 
 #include "archon.h"
 
-
 //--------------------------------------------------------------------------//
-// This SAC implementation is derived from ideas explained here:
+// This SAC implementation is based on SAIS algorithm explained here:
 // http://www.cs.sysu.edu.cn/nong/t_index.files/Two%20Efficient%20Algorithms%20for%20Linear%20Suffix%20Array%20Construction.pdf
 // It also uses some nice optimizations found in Yuta Mori version:
 // https://sites.google.com/site/yuta256/sais
