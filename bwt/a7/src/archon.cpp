@@ -207,25 +207,25 @@ class	Constructor	{
 	//	Induction implementation	//
 
 	struct IPre	{
-		const unsigned n1,n2;
+		const unsigned n1;
 		mutable suffix s;
 		IPre(const suffix N)
-		: n1(N-1U), n2(N-2u), s(0)	{}
+		: n1(N-1U), s(0)	{}
 		// elem check
 		__inline bool skipUp(suffix &x) const	{
 			if(x >= n1)	{
 				x &= ~FLAG_LMS;
 				return true;
 			}
-			s=x; x=0;
+			s=x; x=n1+1;
 			assert(s>0 && s<n1);
 			return false;
 		}
 		__inline bool skipDown(suffix &x) const	{
-			if((unsigned)(x-1) >= n2)
+			if(x >= n1)
 				return true;
-			s=x; //x=0;
-			assert(s>0 && s<n2);
+			s=x; //x=N;
+			assert(s>0 && s<n1);
 			return false;
 		}
 		// elem mod
@@ -240,13 +240,13 @@ class	Constructor	{
 
 
 	struct ITrack	{
-		const unsigned n1,n2;
+		const unsigned n1;
 		t_index *const mask;
 		mutable suffix s;
 		mutable t_index d;
 		// construct
 		ITrack(const suffix N, t_index *const D, const suffix K)
-		: n1(N-1U), n2(N-2u), mask(D), s(0), d(0)	{
+		: n1(N-1U), mask(D), s(0), d(0)	{
 			assert( BIT_LMS+1 == (sizeof(suffix)<<3) );
 			memset( D, 0, 2*K*sizeof(t_index) );
 		}
@@ -261,13 +261,13 @@ class	Constructor	{
 				x &= ~FLAG_LMS;
 				return true;
 			}
-			gens(x); x=0;
+			gens(x); x=n1+1;
 			return false;
 		}
 		__inline bool skipDown(suffix &x) const	{
-			if((unsigned)((x&~FLAG_JUMP)-1) >= n2)
+			if((x&~FLAG_JUMP) >= n1)
 				return true;
-			gens(x); //x=0;
+			gens(x); //x=N;
 			return false;
 		}
 		// elem mod
@@ -290,13 +290,12 @@ class	Constructor	{
 			++d; //reverse flags order
 			t_index i=n1; do	{
 				const suffix s = P[i];
-				// exclude 0 and N+
-				if((unsigned)(s-1) < n1)	{
-					assert(s>0 && s<=n1);
-					P[i] |= FLAG_JUMP;
-					while( assert(i>0), !(P[--i]&FLAG_JUMP) );
-					P[i] ^= FLAG_JUMP;
-				}
+				if(s > n1)
+					continue;
+				assert(s>0 && s<=n1);
+				P[i] |= FLAG_JUMP;
+				while( assert(i>0), !(P[--i]&FLAG_JUMP) );
+				P[i] ^= FLAG_JUMP;
 			}while(i--);
 		}
 	};
