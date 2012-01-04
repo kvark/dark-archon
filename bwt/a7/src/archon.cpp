@@ -141,7 +141,7 @@ class	Constructor	{
 	}
 
 	template<class X>
-	void parseLMS(X &x)	{
+	void parseLMS(const X &x)	{
 		if(!n1)
 			return;
 		t_index i=0,k=0;
@@ -209,11 +209,11 @@ class	Constructor	{
 
 	struct IPre	{
 		const unsigned n1,n2;
-		suffix s;
+		mutable suffix s;
 		IPre(const suffix N)
 		: n1(N-1U), n2(N-2u), s(0)	{}
 		// elem check
-		__inline bool skipUp(suffix &x)	{
+		__inline bool skipUp(suffix &x) const	{
 			if(x >= n1)	{
 				x &= ~FLAG_LMS;
 				return true;
@@ -222,7 +222,7 @@ class	Constructor	{
 			assert(s>0 && s<n1);
 			return false;
 		}
-		__inline bool skipDown(suffix &x)	{
+		__inline bool skipDown(suffix &x) const	{
 			if((unsigned)(x-1) >= n2)
 				return true;
 			s=x; //x=0;
@@ -230,32 +230,34 @@ class	Constructor	{
 			return false;
 		}
 		// elem mod
-		__inline suffix flagUp	(const T& cur, const T& prev)	{
+		__inline suffix flagUp	(const T& cur, const T& prev) const	{
 			return (cur>prev ? FLAG_LMS:0);
 		}
-		__inline suffix flagDown	(const T& cur, const T& prev)	{
+		__inline suffix flagDown	(const T& cur, const T& prev) const	{
 			return (cur<prev ? FLAG_LMS:0);
 		}
-		void middle(suffix *const P)	{}
+		void middle(suffix *const P) const	{}
 	};
 
 
 	struct ITrack	{
 		const unsigned n1,n2;
 		t_index *const mask;
-		suffix s; t_index d;
+		mutable suffix s;
+		mutable t_index d;
+		// construct
 		ITrack(const suffix N, t_index *const D, const suffix K)
 		: n1(N-1U), n2(N-2u), mask(D), s(0), d(0)	{
 			assert( BIT_LMS+1 == (sizeof(suffix)<<3) );
 			memset( D, 0, 2*K*sizeof(t_index) );
 		}
 		// elem check
-		__inline void gens(const suffix &x)	{
+		__inline void gens(const suffix &x) const	{
 			d += x>>BIT_JUMP;
 			s=x & ~FLAG_JUMP;
 			assert(s>0 && s<n1);
 		}
-		__inline bool skipUp(suffix &x)	{
+		__inline bool skipUp(suffix &x) const	{
 			if((x&FLAG_LMS) || (x&~FLAG_JUMP)==n1)	{
 				x &= ~FLAG_LMS;
 				return true;
@@ -263,14 +265,14 @@ class	Constructor	{
 			gens(x); x=0;
 			return false;
 		}
-		__inline bool skipDown(suffix &x)	{
+		__inline bool skipDown(suffix &x) const	{
 			if((unsigned)((x&~FLAG_JUMP)-1) >= n2)
 				return true;
 			gens(x); //x=0;
 			return false;
 		}
 		// elem mod
-		__inline suffix flag(const unsigned t)	{
+		__inline suffix flag(const unsigned t) const	{
 			suffix rez = t<<BIT_LMS;
 			if(mask[t] != d)	{
 				rez |= FLAG_JUMP;
@@ -278,14 +280,14 @@ class	Constructor	{
 			}
 			return rez;
 		}
-		__inline suffix flagUp	(const T& cur, const T& prev)	{
+		__inline suffix flagUp	(const T& cur, const T& prev) const	{
 			return flag( (cur<<1) + (prev<cur) );
 		}
-		__inline suffix flagDown	(const T& cur, const T& prev)	{
+		__inline suffix flagDown	(const T& cur, const T& prev) const	{
 			return flag( (cur<<1) + (prev>cur) );
 		}
 		// middle
-		void middle(suffix *const P)	{
+		void middle(suffix *const P) const	{
 			++d; //reverse flags order
 			t_index i=n1; do	{
 				const suffix s = P[i];
@@ -304,18 +306,18 @@ class	Constructor	{
 	struct IPost	{
 		const unsigned N;
 		const T *const finish;
-		suffix s;
+		mutable suffix s;
 		IPost(const suffix n, const T*const data)
 		: N(n), finish(data+n), s(0)	{}
 		// elem check
-		__inline bool skipUp(suffix &x)	{
+		__inline bool skipUp(suffix &x) const	{
 			s=x; x ^= FLAG_LMS;
 			if(s & FLAG_LMS)
 				return true;
 			assert(s && s<N);
 			return false;
 		}
-		__inline bool skipDown(suffix &x)	{
+		__inline bool skipDown(suffix &x) const	{
 			if(x >= N)	{
 				x &= ~FLAG_LMS;
 				return true;
@@ -324,18 +326,18 @@ class	Constructor	{
 			return false;
 		}
 		// elem mod
-		__inline suffix flagUp	(const T& cur, const T& prev)	{
+		__inline suffix flagUp	(const T& cur, const T& prev) const	{
 			return (&prev==finish || cur>prev ? FLAG_LMS:0);
 		}
-		__inline suffix flagDown	(const T& cur, const T& prev)	{
+		__inline suffix flagDown	(const T& cur, const T& prev) const	{
 			return (&prev!=finish && cur<prev ? FLAG_LMS:0);
 		}
-		void middle(suffix *const P)	{}
+		void middle(suffix *const P) const	{}
 	};
 
 
 	template<class I>
-	void induce(I &in)	{
+	void induce(const I &in)	{
 		t_index i; T prev;
 		suffix *pr = NULL;
 		assert(N);
@@ -563,12 +565,12 @@ class	Constructor	{
 
 	struct XTargetLength	{
 		suffix *const target;
-		t_index last;
+		mutable t_index last;
 		
 		XTargetLength(suffix *const s1)
 		: target(s1), last(0)	{}
 
-		__inline void parse(t_index k, t_index i)	{
+		__inline void parse(t_index k, t_index i) const	{
 			target[i>>1] = i-last;	//length
 			last = i;
 		}
