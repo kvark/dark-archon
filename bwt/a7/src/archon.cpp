@@ -29,9 +29,7 @@ class	Constructor	{
 
 	enum	{
 		BIT_LMS		= 31,
-		FLAG_LMS	= 1<<BIT_LMS,
-		BIT_JUMP	= 30,
-		FLAG_JUMP	= 1<<BIT_JUMP,
+		FLAG_LMS	= 1<<BIT_LMS
 	};
 
 	//---------------------------------
@@ -235,12 +233,12 @@ class	Constructor	{
 			}
 			assert( pr>P+i && pr<P+RE[cur] );
 			const suffix q = s+1;
-			*pr++ = q | (cur>data[q] ? FLAG_LMS:0);
+			*pr++ = q + (cur>data[q] ? FLAG_LMS:0);
 		}
 		//right2left
 		buckets();
 		pr = P + RE[prev=data[0]];
-		*--pr = 1 | (prev<data[1] ? FLAG_LMS:0);
+		*--pr = 1 + (prev<data[1] ? FLAG_LMS:0);
 		i=N; do	{
 			const suffix s = P[--i];
 			if(s>=N-1 || !s)
@@ -254,7 +252,7 @@ class	Constructor	{
 			}
 			assert( pr>P+R[cur] && pr<=P+i );
 			const suffix q = s+1;
-			*--pr = q | (cur<data[q] ? FLAG_LMS:0);
+			*--pr = q + (cur<data[q] ? FLAG_LMS:0);
 		}while(i);
 	}
 
@@ -262,7 +260,7 @@ class	Constructor	{
 	// using additional 2K space
 
 	void inducePreFast(t_index *const D)	{
-		assert( BIT_LMS+1 == sizeof(suffix)*4 );
+		assert( BIT_LMS+1 == (sizeof(suffix)<<3) );
 		t_index i;
 		T prev; suffix *pr=NULL;
 		assert(N);
@@ -295,7 +293,7 @@ class	Constructor	{
 			if(D[t] != d)	{
 				q+=N; D[t]=d;
 			}//todo: can be optimized
-			*pr++ = q | (t<<BIT_LMS);
+			*pr++ = q + (t<<BIT_LMS);
 		}
 		//reverse flags order
 		i=N; do	{
@@ -309,7 +307,7 @@ class	Constructor	{
 		//right2left
 		buckets();
 		pr = P + RE[prev=data[0]];
-		*--pr = (1 + N) | (prev<data[1] ? FLAG_LMS:0);
+		*--pr = 1 + N + (prev<data[1] ? FLAG_LMS:0);
 		i=N; ++d; do	{
 			suffix s = P[--i];
 			if((s&FLAG_LMS) || s==N-1 || s==N+N-1 || !s)
@@ -330,7 +328,7 @@ class	Constructor	{
 			if(D[t] != d)	{
 				q+=N; D[t]=d;
 			}//todo: can be optimized
-			*--pr = q | (t<<BIT_LMS);
+			*--pr = q + (t<<BIT_LMS);
 		}while(i);
 	}
 
@@ -357,12 +355,12 @@ class	Constructor	{
 			}
 			assert( pr>P+i && pr<P+RE[cur] );
 			const suffix q = s+1;
-			*pr++ = q | (q==N || cur>data[q] ? FLAG_LMS:0);
+			*pr++ = q + (q==N || cur>data[q] ? FLAG_LMS:0);
 		}
 		//right2left
 		buckets();
 		pr = P + RE[prev=data[0]];
-		*--pr = 1 | (prev<data[1] ? FLAG_LMS:0);
+		*--pr = 1 + (prev<data[1] ? FLAG_LMS:0);
 		i=N; do	{
 			const suffix s = P[--i];
 			if((s&FLAG_LMS) || s==N)	{
@@ -378,7 +376,7 @@ class	Constructor	{
 			}
 			assert( pr>P+R[cur] && pr<=P+i );
 			const suffix q = s+1;
-			*--pr = q | (q!=N && cur<data[q] ? FLAG_LMS:0);
+			*--pr = q + (q!=N && cur<data[q] ? FLAG_LMS:0);
 		}while(i);
 	}
 
@@ -416,12 +414,16 @@ class	Constructor	{
 	bool reduceFast(t_index *const D)	{
 		findLMS();
 		// mark next-char borders
-		t_index i=K, top=N;
-		for(R2[-1] = 0; i--; top=R2[i-1])	{
-			if(RE[i]==top)
-				continue;
-			assert( RE[i]<top && P[RE[i]] );
-			P[RE[i]] += N;
+		assert(R2);
+		t_index i=K-1, top=N;
+		for(R2[-1]=0;;)	{
+			if(RE[i]!=top)	{
+				assert( RE[i]<top && P[RE[i]] );
+				P[RE[i]] += N;
+			}
+			if(!i)
+				break;
+			top = R2[--i];
 		}
 		inducePreFast(D);
 		name = 0;
@@ -558,7 +560,7 @@ class	Constructor	{
 			suffix *x = P+n1;
 			while(i--)	{
 				const t_index num = R[i];
-				const t_index bot = R2[i-1];		// arg -1 is OK here
+				const t_index bot = R2[(int)i-1];		// arg -1 is OK here
 				const t_index space = top-bot-num;
 				x -= num;
 				memmove( P+top-num, x, num	*sizeof(suffix) );
@@ -604,7 +606,7 @@ public:
 			makeBuckets();
 			memcpy( R2, RE, (K-1)*sizeof(t_index) );
 		}
-		if(!sInduction || (N>>BIT_JUMP))	{
+		if(!sInduction)	{
 			directSort();
 			return;
 		}
