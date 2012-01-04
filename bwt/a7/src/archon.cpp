@@ -141,7 +141,7 @@ class	Constructor	{
 	}
 
 	template<class X>
-	void parseLMS(const X &x)	{
+	void parseLMS(X &x)	{
 		if(!n1)
 			return;
 		t_index i=0,k=0;
@@ -207,10 +207,173 @@ class	Constructor	{
 	//---------------------------------
 	//	Induction implementation	//
 
-	struct Inductor	{
-		bool ckeckUp(suffix &s)	{
-			return true;
+	struct IPre	{
+		const unsigned n1,n2;
+		suffix s;
+		IPre(const suffix N)
+		: n1(N-1U), n2(N-2u), s(0)	{}
+		// elem check
+		__inline bool skipUp(suffix &x)	{
+			if(x >= n1)	{
+				x &= ~FLAG_LMS;
+				return true;
+			}
+			s=x; x=0;
+			assert(s>0 && s<n1);
+			return false;
 		}
+		__inline bool skipDown(suffix &x)	{
+			if((unsigned)(x-1) >= n2)
+				return true;
+			s=x; //x=0;
+			assert(s>0 && s<n2);
+			return false;
+		}
+		// elem mod
+		__inline suffix flagUp	(const T& cur, const T& prev)	{
+			return (cur>prev ? FLAG_LMS:0);
+		}
+		__inline suffix flagDown	(const T& cur, const T& prev)	{
+			return (cur<prev ? FLAG_LMS:0);
+		}
+		void middle(suffix *const P)	{}
+	};
+
+
+	struct ITrack	{
+		const unsigned n1,n2;
+		t_index *const mask;
+		suffix s; t_index d;
+		ITrack(const suffix N, t_index *const D, const suffix K)
+		: n1(N-1U), n2(N-2u), mask(D), s(0), d(0)	{
+			assert( BIT_LMS+1 == (sizeof(suffix)<<3) );
+			memset( D, 0, 2*K*sizeof(t_index) );
+		}
+		// elem check
+		__inline void gens(const suffix &x)	{
+			d += x>>BIT_JUMP;
+			s=x & ~FLAG_JUMP;
+			assert(s>0 && s<n1);
+		}
+		__inline bool skipUp(suffix &x)	{
+			if((x&FLAG_LMS) || (x&~FLAG_JUMP)==n1)	{
+				x &= ~FLAG_LMS;
+				return true;
+			}
+			gens(x); x=0;
+			return false;
+		}
+		__inline bool skipDown(suffix &x)	{
+			if((unsigned)((x&~FLAG_JUMP)-1) >= n2)
+				return true;
+			gens(x); //x=0;
+			return false;
+		}
+		// elem mod
+		__inline suffix flag(const unsigned t)	{
+			suffix rez = t<<BIT_LMS;
+			if(mask[t] != d)	{
+				rez |= FLAG_JUMP;
+				mask[t] = d;
+			}
+			return rez;
+		}
+		__inline suffix flagUp	(const T& cur, const T& prev)	{
+			return flag( (cur<<1) + (prev<cur) );
+		}
+		__inline suffix flagDown	(const T& cur, const T& prev)	{
+			return flag( (cur<<1) + (prev>cur) );
+		}
+		// middle
+		void middle(suffix *const P)	{
+			++d; //reverse flags order
+			t_index i=n1; do	{
+				const suffix s = P[i];
+				// exclude 0 and N+
+				if((unsigned)(s-1) < n1)	{
+					assert(s>0 && s<=n1);
+					P[i] |= FLAG_JUMP;
+					while( assert(i>0), !(P[--i]&FLAG_JUMP) );
+					P[i] ^= FLAG_JUMP;
+				}
+			}while(i--);
+		}
+	};
+
+
+	struct IPost	{
+		const unsigned N;
+		const T *const finish;
+		suffix s;
+		IPost(const suffix n, const T*const data)
+		: N(n), finish(data+n), s(0)	{}
+		// elem check
+		__inline bool skipUp(suffix &x)	{
+			s=x; x ^= FLAG_LMS;
+			if(s & FLAG_LMS)
+				return true;
+			assert(s && s<N);
+			return false;
+		}
+		__inline bool skipDown(suffix &x)	{
+			if(x >= N)	{
+				x &= ~FLAG_LMS;
+				return true;
+			}
+			s=x; assert(s);
+			return false;
+		}
+		// elem mod
+		__inline suffix flagUp	(const T& cur, const T& prev)	{
+			return (&prev==finish || cur>prev ? FLAG_LMS:0);
+		}
+		__inline suffix flagDown	(const T& cur, const T& prev)	{
+			return (&prev!=finish && cur<prev ? FLAG_LMS:0);
+		}
+		void middle(suffix *const P)	{}
+	};
+
+
+	template<class I>
+	void induce(I &in)	{
+		t_index i; T prev;
+		suffix *pr = NULL;
+		assert(N);
+		//go up
+		buckets();
+		pr = P + R[prev=0];
+		for(i=0; i!=N; ++i)	{
+			if(in.skipUp(P[i]))
+				continue;
+			const T cur = data[in.s];
+			assert( data[in.s-1] <= cur );
+			if(cur != prev)	{
+				R[prev] = pr-P;
+				pr = P + R[prev=cur];
+			}
+			assert( pr>P+i && pr<P+RE[cur] );
+			const suffix q = in.s+1;
+			*pr++ = q | in.flagUp(cur,data[q]);
+		}
+		//middle
+		in.middle(P);
+		//go down
+		buckets();
+		pr = P + RE[prev=data[0]];
+		*--pr = 1 | in.flagDown(prev,data[1]);
+		i=N; do	{
+			if(in.skipDown(P[--i]))
+				continue;
+			const T cur = data[in.s];
+			assert( data[in.s-1] >= cur );
+			if(cur != prev)	{
+				RE[prev] = pr-P;
+				pr = P + RE[prev=cur];
+			}
+			assert( pr>P+R[cur] && pr<=P+i );
+			const suffix q = in.s+1;
+			*--pr = q | in.flagDown(cur,data[q]);
+		}while(i);
 	};
 
 	// the pre-pass to sort LMS
@@ -297,8 +460,8 @@ class	Constructor	{
 				pr = P + R[prev=cur];
 			}
 			assert( pr>P+i && pr<P+RE[cur] );
-			unsigned t = (cur<<1) + (data[s+1]<cur);
 			suffix q = s+1;
+			unsigned t = (cur<<1) + (data[q]<cur);
 			if(D[t] != d)	{
 				q |= FLAG_JUMP;
 				D[t] = d;
@@ -336,8 +499,8 @@ class	Constructor	{
 				pr = P + RE[prev=cur];
 			}
 			assert( pr>P+R[cur] && pr<=P+i );
-			unsigned t = (cur<<1) + (data[s+1]>cur);
 			suffix q = s+1;
+			unsigned t = (cur<<1) + (data[q]>cur);
 			if(D[t] != d)	{
 				q |= FLAG_JUMP;
 				D[t] = d;
@@ -400,12 +563,12 @@ class	Constructor	{
 
 	struct XTargetLength	{
 		suffix *const target;
-		mutable t_index last;
+		t_index last;
 		
 		XTargetLength(suffix *const s1)
 		: target(s1), last(0)	{}
 
-		void parse(t_index k, t_index i) const	{
+		__inline void parse(t_index k, t_index i)	{
 			target[i>>1] = i-last;	//length
 			last = i;
 		}
@@ -415,7 +578,11 @@ class	Constructor	{
 		// scatter LMS into bucket positions
 		findLMS();
 		// sort by induction (evil technology!)
+#		ifdef USE_TEMPLATE
+		induce(IPre(N));
+#		else
 		inducePre();
+#		endif
 		// pack LMS indices
 		packTargetIndices();
 		// fill in the lengths
@@ -439,7 +606,11 @@ class	Constructor	{
 				break;
 			top = R2[--i];
 		}
+#		ifdef USE_TEMPLATE
+		induce( ITrack(N,D,K) );
+#		else
 		inducePreFast(D);
+#		endif
 		name = 0;
 		// pack target indices
 		for(top=i=0; ;++i)	{
@@ -525,7 +696,7 @@ class	Constructor	{
 		XListBad(suffix *const s1)
 		: target(s1)	{}
 
-		void parse(t_index k, t_index i) const	{
+		__inline void parse(t_index k, t_index i) const	{
 			target[k] = i;
 		}
 	};
@@ -539,7 +710,7 @@ class	Constructor	{
 			memset( freq, 0, K*sizeof(t_index) );
 		}
 
-		void parse(t_index k, t_index i) const	{
+		__inline void parse(t_index k, t_index i) const	{
 			XListBad::parse(k,i);
 			++freq[input[i]];
 		}
@@ -599,7 +770,11 @@ class	Constructor	{
 			}
 		}
 		// induce the rest of suffixes
+#		ifdef USE_TEMPLATE
+		induce( IPost(N,data) );
+#		else
 		inducePost();
+#		endif
 	}
 
 	//---------------------------------
