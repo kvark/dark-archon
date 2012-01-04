@@ -859,18 +859,32 @@ unsigned Archon::countMemory() const	{
 
 //	ENCODING	//
 
-int Archon::en_read(FILE *const fx, t_index ns)	{
+bool Archon::validate()	{
+	t_index *const R = reinterpret_cast<t_index*>(P+N);
+	memset( R,0, 0x100*sizeof(t_index) );
+	t_index i = N;
+	while(i--)
+		R[str[P[i]-1]]=i;
+	for(i=0; i!=N; ++i)	{
+		const suffix s = P[i];
+		if(s!=N && P[R[str[s]]++] != 1+s)
+			return false;
+	}
+	return true;
+}
+
+int Archon::enRead(FILE *const fx, t_index ns)	{
 	assert(ns>=0 && ns<=Nmax);
 	N = fread( str, 1, ns, fx );
 	return N;
 }
 
-int Archon::en_compute()	{
+int Archon::enCompute()	{
 	Constructor<byte>( str, P, N, 0x100, Nmax-N+Nreserve );
 	return 0;
 }
 
-int Archon::en_write(FILE *const fx)	{
+int Archon::enWrite(FILE *const fx)	{
 	baseId = N;
 	for(t_index i=0; i!=N; ++i)	{
 		suffix pos = P[i];
@@ -893,14 +907,14 @@ void Archon::roll(const t_index i)	{
 	assert(N==1 || i != P[i]);
 }
 
-int Archon::de_read(FILE *const fx, t_index ns)	{
-	en_read(fx,ns);
+int Archon::deRead(FILE *const fx, t_index ns)	{
+	enRead(fx,ns);
 	int ok = fread( &baseId, sizeof(t_index), 1, fx );
 	assert(ok && baseId<N);
 	return N;
 }
 
-int Archon::de_compute()	{
+int Archon::deCompute()	{
 	t_index i,k;
 	// compute buchet heads
 	t_index *const R = reinterpret_cast<t_index*>(P+N+1);
@@ -920,7 +934,7 @@ int Archon::de_compute()	{
 	return 0;
 }
 
-int Archon::de_write(FILE *const fx)	{
+int Archon::deWrite(FILE *const fx)	{
 	t_index i, k=baseId;
 	for(i=0; i!=N; ++i,k=P[k])
 		putc(str[k],fx);

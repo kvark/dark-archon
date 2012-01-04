@@ -17,12 +17,13 @@ public:
 	Archon(const t_index N);
 	~Archon();
 	unsigned countMemory() const;
+	bool validate();
 	// encoding
-	int en_read(FILE *const fx, t_index ns);
-	int en_compute();
-	int en_write(FILE *const fx);
+	int enRead(FILE *const fx, t_index ns);
+	int enCompute();
+	int enWrite(FILE *const fx);
 	// decoding
-	int de_read(FILE *const fx, t_index ns);
-	int de_compute();
-	int de_write(FILE *const fx);
+	int deRead(FILE *const fx, t_index ns);
+	int deCompute();
+	int deWrite(FILE *const fx);
 };

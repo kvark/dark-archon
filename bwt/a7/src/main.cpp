@@ -33,33 +33,38 @@ int main(const int argc, const char *const argv[])	{
 	fseek(fx,0,SEEK_SET);
 	if(mode)	{
 		printf("Reading raw...\n");
-		ar.en_read(fx,N);
+		ar.enRead(fx,N);
 		fclose(fx);
 		printf("Encoding SA...\n");
 		t0 = clock();
-		ar.en_compute();
+		ar.enCompute();
 		t0 = clock()-t0;
+#		ifndef NO_VALIDATE
+		printf("Validating...");
+		const bool rez = ar.validate();
+		printf("%s\n", rez?"OK":"Fail");
+#		endif
 		printf("Writing BWT...\n");
 		fx = fopen(argv[3],"wb");
 		if(!fx)
 			return -3;
-		ar.en_write(fx);
+		ar.enWrite(fx);
 	}else	{
 		N -= sizeof(int);
 		if(N<=0)
 			return -2;
 		printf("Reading BWT...\n");
-		ar.de_read(fx,N);
+		ar.deRead(fx,N);
 		fclose(fx);
 		printf("Decoding SA...\n");
 		t0 = clock();
-		ar.de_compute();
+		ar.deCompute();
 		t0 = clock()-t0;
 		printf("Writing raw...\n");
 		fx = fopen(argv[3],"wb");
 		if(!fx)
 			return -3;
-		ar.de_write(fx);
+		ar.deWrite(fx);
 	}
 	fclose(fx);
 	printf("SA time: %.2f sec\n", t0*1.f/CLOCKS_PER_SEC);
