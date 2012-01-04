@@ -11,12 +11,12 @@ int main(const int argc, const char *const argv[])	{
 	FILE *fx; bool mode; time_t t0;
 	printf("Archon-7 prototype\n");
 	if(argc != 4)	{
-		printf(sUsage);
+		printf("%s",sUsage);
 		return -1;
 	}
 	if(!strcmp(argv[1],"e")) mode = true; else
 	if(!strcmp(argv[1],"d")) mode = false; else	{
-		printf(sUsage);
+		printf("%s",sUsage);
 		return -1;
 	}
 	printf("Initializing...\n");
