@@ -14,6 +14,7 @@
 static const bool	sInduction	= true;
 static const bool	sTracking	= true;
 
+
 template<typename T>
 class	Constructor	{
 	const T	*const data;	// input string
@@ -221,7 +222,7 @@ class	Constructor	{
 		for(i=0; i!=N; ++i)	{
 			const suffix s = P[i];
 			// empty space is supposed to be flagged
-			if(s>=N-1)	{
+			if((s&FLAG_LMS) >= N-1)	{
 				P[i] = s & ~FLAG_LMS;
 				continue;
 			}
@@ -294,7 +295,7 @@ class	Constructor	{
 			if(D[t] != d)	{
 				q |= FLAG_JUMP;
 				D[t] = d;
-			}//todo: can be optimized
+			}
 			*pr++ = q | (t<<BIT_LMS);
 		}
 		//reverse flags order
@@ -331,7 +332,7 @@ class	Constructor	{
 			if(D[t] != d)	{
 				q |= FLAG_JUMP;
 				D[t] = d;
-			}//todo: can be optimized
+			}
 			*--pr = q | (t<<BIT_LMS);
 		}while(i);
 	}
