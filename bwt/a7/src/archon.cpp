@@ -136,7 +136,7 @@ class	Constructor	{
 	void fillEmpty(t_index off, t_index num)	{
 		//memset( P+off, 0, num*sizeof(suffix) );
 		while(num--)
-			P[off+num] = FLAG_LMS;
+			P[off+num] = N|FLAG_LMS;
 	}
 
 	template<class X>
@@ -397,7 +397,7 @@ class	Constructor	{
 				continue;
 			}
 			assert(s>0 && s<N-1);
-			P[i] = 0;
+			P[i] = N;	//skipped value
 			const T cur = data[s];
 			assert( data[s-1] <= cur );
 			if(cur != prev)	{
@@ -414,10 +414,10 @@ class	Constructor	{
 		*--pr = 1 + (prev<data[1] ? FLAG_LMS:0);
 		i=N; do	{
 			const suffix s = P[--i];
-			if((unsigned)(s-1) >= N-2)
+			if(s >= N-1)
 				continue;
 			assert(s>0 && s<N-1);
-			//P[i] = 0;
+			//P[i] = N;
 			const T cur = data[s];
 			assert( data[s-1] >= cur );
 			if(cur != prev)	{
@@ -451,7 +451,7 @@ class	Constructor	{
 				continue;
 			}
 			assert(s>0 && (s&~FLAG_JUMP)<N-1);
-			P[i] = 0;
+			P[i] = N;	//skipped value
 			d += s>>BIT_JUMP;
 			s &= ~FLAG_JUMP;
 			const T cur = data[s];
@@ -472,13 +472,13 @@ class	Constructor	{
 		//reverse flags order
 		i=N; do	{
 			const suffix s = P[--i];
-			// exclude 0 and N+
-			if((unsigned)(s-1) < N-1U)	{
-				assert(s>0 && s<N);
-				P[i] |= FLAG_JUMP;
-				while( assert(i>0), !(P[--i]&FLAG_JUMP) );
-				P[i] ^= FLAG_JUMP;
-			}
+			// exclude and N+
+			if(s>=N)
+				continue;
+			assert(s>0 && s<N);
+			P[i] |= FLAG_JUMP;
+			while( assert(i>0), !(P[--i]&FLAG_JUMP) );
+			P[i] ^= FLAG_JUMP;
 		}while(i);
 		//right2left
 		buckets();
@@ -486,11 +486,11 @@ class	Constructor	{
 		*--pr = 1 | FLAG_JUMP | (prev<data[1] ? FLAG_LMS:0);
 		i=N; ++d; do	{
 			suffix s = P[--i];
-			// exclude N-1 and 0 and LMS flags
-			if((unsigned)((s&~FLAG_JUMP)-1) >= N-2U)
+			// exclude N-1 and LMS flags
+			if((s&~FLAG_JUMP) >= N-1)
 				continue;
 			assert(s>0 && (s&~FLAG_JUMP)<N-1);
-			//P[i] = 0;
+			//P[i] = N;
 			d += s>>BIT_JUMP;
 			s &= ~FLAG_JUMP;
 			const T cur = data[s];
@@ -619,13 +619,9 @@ class	Constructor	{
 			suffix s = P[i];
 			if(!(s&FLAG_LMS))
 				continue;
-			s ^= FLAG_LMS;
-			if(s & FLAG_JUMP)	{
-				if(s==(N|FLAG_JUMP))
-					continue;
-				++name;
-			}
-			P[top] = s;
+			P[top] = (s ^= FLAG_LMS);
+			name += s>>BIT_JUMP;
+			assert( s && (s&~FLAG_JUMP)<N );
 			if(++top==n1)
 				break;
 		}
@@ -758,7 +754,7 @@ class	Constructor	{
 			suffix *pr = P + RE[prev_sym];
 			for(t_index i=n1; i--; )	{
 				const suffix suf = P[i];
-				P[i] = FLAG_LMS;
+				P[i] = N | FLAG_LMS;
 				assert(suf>0 && suf<=(suffix)N	&& "Invalid suffix!");
 				const T cur = data[suf-1];
 				if(cur != prev_sym)	{
@@ -828,7 +824,8 @@ public:
 t_index Archon::estimateReserve(const t_index n)	{
 	t_index total = 0x10000;
 #	ifndef NO_SQUEEZE
-	const int add = 0x400;	// R(0x101) + R2(0xFF) + D(0x200)
+	// R(0x101) + R2(0xFF) + D(0x200)
+	const int add = 0x400;
 	if(!(n>>17))
 		total = n/4+1;
 	if(total<add)

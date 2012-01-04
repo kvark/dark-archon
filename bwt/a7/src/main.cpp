@@ -44,11 +44,13 @@ int main(const int argc, const char *const argv[])	{
 		const bool rez = ar.validate();
 		printf("%s\n", rez?"OK":"Fail");
 #		endif
+#		ifndef NO_WRITE
 		printf("Writing BWT...\n");
 		fx = fopen(argv[3],"wb");
 		if(!fx)
 			return -3;
 		ar.enWrite(fx);
+#		endif
 	}else	{
 		N -= sizeof(int);
 		if(N<=0)
