@@ -13,7 +13,7 @@ static int R[0x100], rb[0x101] = {0};
 
 int main()	{
 	time_t t; unsigned i,j;
-	const unsigned K = 1<<15;
+	const unsigned K = 1<<13;
 	printf("Started\n");
 	for(i=0; i!=SIZE; ++i)	{
 		++rb[src[i] = i*5423];
@@ -21,8 +21,8 @@ int main()	{
 	for(rb[i=0x100]=j=SIZE; i--;)	{
 		rb[i] = (j -= rb[i]);
 	}
-	// iteration +
-	printf("Iter-1\n");
+
+	// iteration X++
 	t = clock();
 	for(j=0; j!=K; ++j)	{
 		memcpy( R, rb+0, 0x100*sizeof(int) );
@@ -30,9 +30,22 @@ int main()	{
 			dst[R[src[i]]++] = src[i];
 	}
 	t = clock() - t;
-	printf("%.2f\n",t*1.f/CLOCKS_PER_SEC);
-	// iteration -
-	printf("Iter-2\n");
+	printf("X++: %.2f\n",t*1.f/CLOCKS_PER_SEC);
+
+	// iteration X--
+	t = clock();
+	for(j=0; j!=K; ++j)	{
+		memcpy( R, rb+1, 0x100*sizeof(int) );
+		for(i=0; i!=0x100; ++i)
+			--R[i];
+		i=SIZE; do	{
+			dst[R[src[i]]--] = src[i];
+		}while(--i);
+	}
+	t = clock() - t;
+	printf("X--: %.2f\n",t*1.f/CLOCKS_PER_SEC);
+
+	// iteration --X
 	t = clock();
 	for(j=0; j!=K; ++j)	{
 		memcpy( R, rb+1, 0x100*sizeof(int) );
@@ -41,9 +54,8 @@ int main()	{
 		}while(--i);
 	}
 	t = clock() - t;
-	printf("%.2f\n",t*1.f/CLOCKS_PER_SEC);
-	// iteration ++
-	printf("Iter-3\n");
+	printf("--X: %.2f\n",t*1.f/CLOCKS_PER_SEC);
+	// iteration ++X
 	t = clock();
 	for(j=0; j!=K; ++j)	{
 		memcpy( R, rb+0, 0x100*sizeof(int) );
@@ -53,6 +65,6 @@ int main()	{
 			dst[++R[src[i]]] = src[i];
 	}
 	t = clock() - t;
-	printf("%.2f\n",t*1.f/CLOCKS_PER_SEC);
+	printf("++X: %.2f\n",t*1.f/CLOCKS_PER_SEC);
 	return 0;
 }
