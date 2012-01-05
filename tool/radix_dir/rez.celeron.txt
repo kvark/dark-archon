@@ -1,4 +1,4 @@
-1: 0.87
-2: 0.66
-3: 0.66
-Conclusion: prefixes are faster
+X++: 1.74
+X--: 1.75
+--X: 1.32
+++X: 1.31
