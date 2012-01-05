@@ -7,8 +7,21 @@ enum	{
 	SIZE = 1<<15
 };
 
-static unsigned char src[SIZE],dst[SIZE];
+typedef unsigned char byte;
+static byte src[SIZE], dst[SIZE];
 static int R[0x100], rb[0x101] = {0};
+
+static time_t separateRadix(int *const radix, int K)	{
+	const time_t t = clock();
+	int j,i;
+	for(j=0; j!=K; ++j)	{
+		memcpy( radix, rb+1, 0x100*sizeof(int) );
+		i=SIZE; do	{
+			dst[--radix[src[i]]] = src[i];
+		}while(--i);
+	}
+	return clock() - t;
+}
 
 
 int main()	{
@@ -55,6 +68,7 @@ int main()	{
 	}
 	t = clock() - t;
 	printf("--X: %.2f\n",t*1.f/CLOCKS_PER_SEC);
+
 	// iteration ++X
 	t = clock();
 	for(j=0; j!=K; ++j)	{
@@ -66,5 +80,9 @@ int main()	{
 	}
 	t = clock() - t;
 	printf("++X: %.2f\n",t*1.f/CLOCKS_PER_SEC);
+
+	// separate -- function
+	t = separateRadix(R,K);
+	printf("Separate --X: %.2f\n",t*1.f/CLOCKS_PER_SEC);
 	return 0;
 }
