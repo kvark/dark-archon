@@ -121,7 +121,7 @@ class	Constructor	{
 		for(i=0; i<N; ++i)
 			++R[data[i]];
 		for(R[i=K]=sum=N; i--;)
-			R[i] = (sum -= R[i]);
+			sum = R[i] = sum-R[i];	// cf
 		assert(!sum);
 	}
 
@@ -135,8 +135,9 @@ class	Constructor	{
 
 	void fillEmpty(t_index off, t_index num)	{
 		//memset( P+off, 0, num*sizeof(suffix) );
-		while(num--)
-			P[off+num] = N|FLAG_LMS;
+		t_index i = off; off+=num;
+		while(i!=off)
+			P[i++] = N|FLAG_LMS;
 	}
 
 	template<class X>
@@ -207,26 +208,24 @@ class	Constructor	{
 	//	Induction implementation	//
 
 	struct IPre	{
-		const unsigned n1;
-		mutable suffix s;
+		enum {
+			SUF_XOR_UP		= 0,
+			SUF_SKIP_UP		= ~FLAG_LMS,
+			SUF_XOR_DOWN	= 0,
+			SUF_SKIP_DOWN	= ~0,
+			SUF_MASK		= ~0,
+		};
+		const t_index n1, limit;
 		IPre(const suffix N)
-		: n1(N-1U), s(0)	{}
+		: n1(N-1), limit(n1)	{}
 		// elem check
-		__inline bool skipUp(suffix &x) const	{
-			if(x >= n1)	{
-				x &= ~FLAG_LMS;
-				return true;
-			}
-			s=x; x=n1+1;
+		__inline void acceptUp(suffix &x, suffix &s) const	{
 			assert(s>0 && s<n1);
-			return false;
+			x = n1+1;
 		}
-		__inline bool skipDown(suffix &x) const	{
-			if(x >= n1)
-				return true;
-			s=x; //x=N;
+		__inline void acceptDown(suffix &x, suffix &s) const	{
 			assert(s>0 && s<n1);
-			return false;
+			//x=n1+1
 		}
 		// elem mod
 		__inline suffix flagUp	(const T& cur, const T& prev) const	{
@@ -240,35 +239,36 @@ class	Constructor	{
 
 
 	struct ITrack	{
-		const unsigned n1;
+		enum {
+			SUF_XOR_UP		= 0,
+			SUF_SKIP_UP		= ~FLAG_LMS,
+			SUF_XOR_DOWN	= 0,
+			SUF_SKIP_DOWN	= ~0,
+			SUF_MASK		= ~FLAG_JUMP,
+		};
+		const t_index n1, limit;
 		t_index *const mask;
-		mutable suffix s;
 		mutable t_index d;
 		// construct
-		ITrack(const suffix N, t_index *const D, const suffix K)
-		: n1(N-1U), mask(D), s(0), d(0)	{
+		ITrack(const t_index N, t_index *const D, const suffix K)
+		: n1(N-1U), limit(n1), mask(D), d(0)	{
 			assert( BIT_LMS+1 == (sizeof(suffix)<<3) );
 			memset( D, 0, 2*K*sizeof(t_index) );
 		}
 		// elem check
-		__inline void gens(const suffix &x) const	{
+		__inline suffix gens(const suffix &x) const	{
 			d += x>>BIT_JUMP;
-			s=x & ~FLAG_JUMP;
+			return x & ~FLAG_JUMP;
+		}
+		__inline void acceptUp(suffix &x, suffix &s) const	{
+			s = gens(x);
 			assert(s>0 && s<n1);
+			x = n1+1;
 		}
-		__inline bool skipUp(suffix &x) const	{
-			if((x&FLAG_LMS) || (x&~FLAG_JUMP)==n1)	{
-				x &= ~FLAG_LMS;
-				return true;
-			}
-			gens(x); x=n1+1;
-			return false;
-		}
-		__inline bool skipDown(suffix &x) const	{
-			if((x&~FLAG_JUMP) >= n1)
-				return true;
-			gens(x); //x=N;
-			return false;
+		__inline void acceptDown(suffix &x, suffix &s) const	{
+			s = gens(x);
+			assert(s>0 && s<n1);
+			//x = n1+1;
 		}
 		// elem mod
 		__inline suffix flag(const unsigned t) const	{
@@ -302,26 +302,23 @@ class	Constructor	{
 
 
 	struct IPost	{
-		const unsigned N;
+		enum {
+			SUF_XOR_UP		= FLAG_LMS,
+			SUF_SKIP_UP		= ~0,
+			SUF_XOR_DOWN	= 0,
+			SUF_SKIP_DOWN	= ~FLAG_LMS,
+			SUF_MASK		= ~FLAG_JUMP,
+		};
+		const t_index N, limit;
 		const T *const finish;
-		mutable suffix s;
-		IPost(const suffix n, const T*const data)
-		: N(n), finish(data+n), s(0)	{}
+		IPost(const suffix n, const T *const data)
+		: N(n), limit(n), finish(data+n)	{}
 		// elem check
-		__inline bool skipUp(suffix &x) const	{
-			s=x; x ^= FLAG_LMS;
-			if(s & FLAG_LMS)
-				return true;
+		__inline void acceptUp(suffix &x, suffix &s) const	{
 			assert(s && s<N);
-			return false;
 		}
-		__inline bool skipDown(suffix &x) const	{
-			if(x >= N)	{
-				x &= ~FLAG_LMS;
-				return true;
-			}
-			s=x; assert(s);
-			return false;
+		__inline void acceptDown(suffix &x, suffix &s) const	{
+			assert(s);
 		}
 		// elem mod
 		__inline suffix flagUp	(const T& cur, const T& prev) const	{
@@ -343,16 +340,21 @@ class	Constructor	{
 		buckets();
 		pr = P + R[prev=0];
 		for(i=0; i!=N; ++i)	{
-			if(in.skipUp(P[i]))
+			suffix s = P[i] & I::SUF_MASK;
+			P[i] ^= I::SUF_XOR_UP;
+			if(s >= in.limit)	{
+				P[i] &= I::SUF_SKIP_UP;
 				continue;
-			const T cur = data[in.s];
-			assert( data[in.s-1] <= cur );
+			}
+			in.acceptUp( P[i],s );
+			const T cur = data[s];
+			assert( data[s-1] <= cur );
 			if(cur != prev)	{
 				R[prev] = pr-P;
 				pr = P + R[prev=cur];
 			}
 			assert( pr>P+i && pr<P+RE[cur] );
-			const suffix q = in.s+1;
+			const suffix q = s+1;
 			*pr++ = q | in.flagUp(cur,data[q]);
 		}
 		//middle
@@ -361,17 +363,24 @@ class	Constructor	{
 		buckets();
 		pr = P + RE[prev=data[0]];
 		*--pr = 1 | in.flagDown(prev,data[1]);
-		i=N; do	{
-			if(in.skipDown(P[--i]))
+		i=N; do	{--i;
+			suffix s = (I::SUF_MASK==~0 ? P[i] : P[i] & I::SUF_MASK);
+			if(I::SUF_XOR_DOWN)
+				P[i] ^= I::SUF_XOR_DOWN;
+			if(s >= in.limit)	{
+				if(I::SUF_SKIP_DOWN)
+					P[i] &= I::SUF_SKIP_DOWN;
 				continue;
-			const T cur = data[in.s];
-			assert( data[in.s-1] >= cur );
+			}
+			in.acceptDown(P[i],s);
+			const T cur = data[s];
+			assert( data[s-1] >= cur );
 			if(cur != prev)	{
 				RE[prev] = pr-P;
 				pr = P + RE[prev=cur];
 			}
 			assert( pr>P+R[cur] && pr<=P+i );
-			const suffix q = in.s+1;
+			const suffix q = s+1;
 			*--pr = q | in.flagDown(cur,data[q]);
 		}while(i);
 	};
@@ -471,11 +480,11 @@ class	Constructor	{
 		//reverse flags order
 		i=N; do	{
 			const suffix s = P[--i];
-			// exclude and N+
+			// exclude N+
 			if(s>=N)
 				continue;
 			assert(s>0 && s<N);
-			P[i] |= FLAG_JUMP;
+			P[i] ^= FLAG_JUMP;
 			while( assert(i>0), !(P[--i]&FLAG_JUMP) );
 			P[i] ^= FLAG_JUMP;
 		}while(i);
