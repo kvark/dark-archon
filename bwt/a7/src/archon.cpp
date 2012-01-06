@@ -207,71 +207,71 @@ class	Constructor	{
 	//---------------------------------
 	//	Induction implementation	//
 
+	// This section contains a try to share the code by using templated induce() method
+	// Unfortunately, it works 4% slower by unknown reasons so far
+	// Can be enabled with USE_TEMPLATE definition
+
 	struct IPre	{
-		enum {
-			SUF_XOR_UP		= 0,
-			SUF_SKIP_UP		= ~FLAG_LMS,
-			SUF_XOR_DOWN	= 0,
-			SUF_SKIP_DOWN	= ~0,
-			SUF_MASK		= ~0,
-		};
-		const t_index n1, limit;
-		IPre(const suffix N)
-		: n1(N-1), limit(n1)	{}
+		const t_index n1;
+		IPre(const suffix n)
+		: n1(n-1)	{}
 		// elem check
-		__inline void acceptUp(suffix &x, suffix &s) const	{
+		inline suffix getUp(suffix &orig) const	{
+			const suffix s = orig;
+			if(s >= n1)
+				return 0;
+			orig = n1;
 			assert(s>0 && s<n1);
-			x = n1+1;
+			return s;
 		}
-		__inline void acceptDown(suffix &x, suffix &s) const	{
-			assert(s>0 && s<n1);
-			//x=n1+1
+		inline suffix getDown(const suffix orig) const	{
+			if(orig >= n1)
+				return 0;
+			assert(orig>0 && orig<n1);
+			return orig;
 		}
 		// elem mod
-		__inline suffix flagUp	(const T& cur, const T& prev) const	{
-			return (cur>prev ? FLAG_LMS:0);
+		inline suffix flagUp	(const suffix q, const T cur, const T prev) const	{
+			return (cur>prev ? q|FLAG_LMS : q);
 		}
-		__inline suffix flagDown	(const T& cur, const T& prev) const	{
-			return (cur<prev ? FLAG_LMS:0);
+		inline suffix flagDown	(const suffix q, const T cur, const T prev) const	{
+			return (cur<prev ? q|FLAG_LMS : q);
 		}
 		void middle(suffix *const P) const	{}
 	};
 
 
 	struct ITrack	{
-		enum {
-			SUF_XOR_UP		= 0,
-			SUF_SKIP_UP		= ~FLAG_LMS,
-			SUF_XOR_DOWN	= 0,
-			SUF_SKIP_DOWN	= ~0,
-			SUF_MASK		= ~FLAG_JUMP,
-		};
-		const t_index n1, limit;
+		const t_index n1;
 		t_index *const mask;
 		mutable t_index d;
 		// construct
 		ITrack(const t_index N, t_index *const D, const suffix K)
-		: n1(N-1U), limit(n1), mask(D), d(0)	{
+		: n1(N-1U), mask(D), d(0)	{
 			assert( BIT_LMS+1 == (sizeof(suffix)<<3) );
 			memset( D, 0, 2*K*sizeof(t_index) );
 		}
 		// elem check
-		__inline suffix gens(const suffix &x) const	{
+		inline suffix get(const suffix x) const	{
 			d += x>>BIT_JUMP;
 			return x & ~FLAG_JUMP;
 		}
-		__inline void acceptUp(suffix &x, suffix &s) const	{
-			s = gens(x);
-			assert(s>0 && s<n1);
-			x = n1+1;
+		inline suffix getUp(suffix &orig) const	{
+			const suffix s = orig;
+			if((s&FLAG_LMS) || (s&~FLAG_JUMP)==n1)	{
+				orig = s & ~FLAG_LMS;
+				return 0;
+			}
+			orig = n1+1;
+			return get(s);
 		}
-		__inline void acceptDown(suffix &x, suffix &s) const	{
-			s = gens(x);
-			assert(s>0 && s<n1);
-			//x = n1+1;
+		inline suffix getDown(const suffix orig) const	{
+			if((orig&~FLAG_JUMP) >= n1)
+				return 0;
+			return get(orig);
 		}
 		// elem mod
-		__inline suffix flag(const unsigned t) const	{
+		inline suffix flag(const unsigned t) const	{
 			suffix rez = t<<BIT_LMS;
 			if(mask[t] != d)	{
 				rez |= FLAG_JUMP;
@@ -279,53 +279,56 @@ class	Constructor	{
 			}
 			return rez;
 		}
-		__inline suffix flagUp	(const T& cur, const T& prev) const	{
-			return flag( (cur<<1) + (prev<cur) );
+		inline suffix flagUp	(const suffix q, const T cur, const T& prev) const	{
+			return q | flag( (cur<<1) + (prev<cur) );
 		}
-		__inline suffix flagDown	(const T& cur, const T& prev) const	{
-			return flag( (cur<<1) + (prev>cur) );
+		inline suffix flagDown	(const suffix q, const T cur, const T& prev) const	{
+			return q | flag( (cur<<1) + (prev>cur) );
 		}
 		// middle
 		void middle(suffix *const P) const	{
 			++d; //reverse flags order
-			t_index i=n1; do	{
-				const suffix s = P[i];
+			t_index i=n1+1;
+			do	{
+				const suffix s = P[--i];
 				if(s > n1)
 					continue;
 				assert(s>0 && s<=n1);
 				P[i] |= FLAG_JUMP;
 				while( assert(i>0), !(P[--i]&FLAG_JUMP) );
 				P[i] ^= FLAG_JUMP;
-			}while(i--);
+			}while(i);
 		}
 	};
 
 
 	struct IPost	{
-		enum {
-			SUF_XOR_UP		= FLAG_LMS,
-			SUF_SKIP_UP		= ~0,
-			SUF_XOR_DOWN	= 0,
-			SUF_SKIP_DOWN	= ~FLAG_LMS,
-			SUF_MASK		= ~FLAG_JUMP,
-		};
-		const t_index N, limit;
-		const T *const finish;
-		IPost(const suffix n, const T *const data)
-		: N(n), limit(n), finish(data+n)	{}
+		const t_index N;
+		IPost(const suffix n)
+		: N(n)	{}
 		// elem check
-		__inline void acceptUp(suffix &x, suffix &s) const	{
+		inline suffix getUp(suffix &orig) const	{
+			const suffix s = orig;
+			orig = s ^ FLAG_LMS;
+			if(s & FLAG_LMS)
+				return 0;
 			assert(s && s<N);
+			return s;
 		}
-		__inline void acceptDown(suffix &x, suffix &s) const	{
-			assert(s);
+		inline suffix getDown(suffix &orig) const	{
+			const suffix s = orig;
+			if(s >= N)	{
+				orig = s & ~FLAG_LMS;
+				return 0;
+			}
+			return s;
 		}
 		// elem mod
-		__inline suffix flagUp	(const T& cur, const T& prev) const	{
-			return (&prev==finish || cur>prev ? FLAG_LMS:0);
+		inline suffix flagUp	(const suffix q, const T cur, const T prev) const	{
+			return (q==N || cur>prev ? q|FLAG_LMS : q);
 		}
-		__inline suffix flagDown	(const T& cur, const T& prev) const	{
-			return (&prev!=finish && cur<prev ? FLAG_LMS:0);
+		inline suffix flagDown	(const suffix q, const T cur, const T prev) const	{
+			return (q!=N && cur<prev ? q|FLAG_LMS : q);
 		}
 		void middle(suffix *const P) const	{}
 	};
@@ -340,13 +343,9 @@ class	Constructor	{
 		buckets();
 		pr = P + R[prev=0];
 		for(i=0; i!=N; ++i)	{
-			suffix s = P[i] & I::SUF_MASK;
-			P[i] ^= I::SUF_XOR_UP;
-			if(s >= in.limit)	{
-				P[i] &= I::SUF_SKIP_UP;
+			const suffix s = in.getUp(P[i]);
+			if(!s)
 				continue;
-			}
-			in.acceptUp( P[i],s );
 			const T cur = data[s];
 			assert( data[s-1] <= cur );
 			if(cur != prev)	{
@@ -355,24 +354,18 @@ class	Constructor	{
 			}
 			assert( pr>P+i && pr<P+RE[cur] );
 			const suffix q = s+1;
-			*pr++ = q | in.flagUp(cur,data[q]);
+			*pr++ = in.flagUp(q,cur,data[q]);
 		}
 		//middle
 		in.middle(P);
 		//go down
 		buckets();
 		pr = P + RE[prev=data[0]];
-		*--pr = 1 | in.flagDown(prev,data[1]);
-		i=N; do	{--i;
-			suffix s = (I::SUF_MASK==~0 ? P[i] : P[i] & I::SUF_MASK);
-			if(I::SUF_XOR_DOWN)
-				P[i] ^= I::SUF_XOR_DOWN;
-			if(s >= in.limit)	{
-				if(I::SUF_SKIP_DOWN)
-					P[i] &= I::SUF_SKIP_DOWN;
+		*--pr = in.flagDown(1,prev,data[1]);
+		i=N+1; do	{--i;
+			const suffix s = in.getDown(P[i]);
+			if(!s)
 				continue;
-			}
-			in.acceptDown(P[i],s);
 			const T cur = data[s];
 			assert( data[s-1] >= cur );
 			if(cur != prev)	{
@@ -381,10 +374,12 @@ class	Constructor	{
 			}
 			assert( pr>P+R[cur] && pr<=P+i );
 			const suffix q = s+1;
-			*--pr = q | in.flagDown(cur,data[q]);
+			*--pr = in.flagDown(q,cur,data[q]);
 		}while(i);
 	};
 
+	
+	// This section contains a real induction code in 3 different variants
 	// the pre-pass to sort LMS
 	//todo: use buckets to traverse the SA efficiently
 	// if R2 is available
@@ -776,7 +771,7 @@ class	Constructor	{
 		}
 		// induce the rest of suffixes
 #		ifdef USE_TEMPLATE
-		induce( IPost(N,data) );
+		induce( IPost(N) );
 #		else
 		inducePost();
 #		endif
